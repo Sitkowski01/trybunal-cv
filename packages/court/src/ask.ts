@@ -51,7 +51,7 @@ export const backoffMs = (attempt: number) => 1000 * 2 ** (attempt - 1);
  */
 export async function ask<T>(llm: LlmClient, request: StructuredRequest<T>, options: AskOptions<T>): Promise<T> {
   let current = request;
-  let lastProblem = "";
+  let lastProblem = "nie bylo zadnej proby";
   for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
     const base = { label: request.label, attempt, model: current.model };
     try {

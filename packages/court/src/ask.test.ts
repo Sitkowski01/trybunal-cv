@@ -142,3 +142,12 @@ describe("backoffMs", () => {
     expect([1, 2, 3].map(backoffMs)).toEqual([1000, 2000, 4000]);
   });
 });
+
+describe("ask — konfiguracja bez prob", () => {
+  it("zero prob to od razu StepFailedError, bez pytania modelu", async () => {
+    const { llm, requests } = scripted(ok(1));
+    const options = { maxAttempts: 0, sleep: () => Promise.resolve(), record: () => undefined };
+    await expect(ask(llm, request, options)).rejects.toThrow("brak poprawnej odpowiedzi po 0 probach (nie bylo zadnej proby)");
+    expect(requests).toEqual([]);
+  });
+});

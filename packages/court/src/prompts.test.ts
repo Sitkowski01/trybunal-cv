@@ -1,9 +1,11 @@
 import { type Assessment, CRITIC_IDS, type CriticId, criticById, pendingVerdict, replay, type TrialEvent } from "@trybunal/domain";
 import { describe, expect, it } from "vitest";
 import {
+  ASSESSMENT_TASK,
   debateTask,
   documents,
   instructionsFor,
+  JUDGE_INSTRUCTIONS,
   judgeTask,
   prosecutionTask,
   RULES,
@@ -102,5 +104,63 @@ describe("zadania faz", () => {
     const text = judgeTask(state, pendingVerdict(state));
     expect(text).toContain("ZAPROSIC NA ROZMOWE. Srednia przysieglych: 7. Rozrzut ocen: 0. ");
     expect(text).not.toMatch(/niejednoznaczne|filtra ATS|Zmiany zdania/);
+  });
+});
+
+describe("pelne prompty — zmiana tekstu promptu ma byc widoczna w review", () => {
+  const twoConcerns: TrialEvent = {
+    type: "AssessmentSubmitted",
+    assessment: {
+      ...assessment("ats", 3, "Java, Spring"),
+      concerns: [
+        { quote: "Java, Spring", issue: "brak wersji", severity: "low" },
+        { quote: "Ekspert React", issue: "nie z oferty", severity: "medium" },
+      ],
+    },
+  };
+  const history: TrialEvent[] = [
+    filed,
+    twoConcerns,
+    ...assessed.filter((e) => e.type === "AssessmentSubmitted" && e.assessment.criticId !== "ats"),
+    { type: "ProsecutionDelivered", speech: "Odrzucic" },
+    { type: "StatementMade", round: 1, criticId: "ats", statement: "Brak Kafki", revisedScore: 2 },
+    { type: "StatementMade", round: 1, criticId: "hr", statement: "Ale testy sa", revisedScore: null },
+  ];
+  const debated = replay(history);
+  const judged = (rest: TrialEvent[]) => {
+    const state = replay([...history, ...rest]);
+    return judgeTask(state, pendingVerdict(state));
+  };
+  const finish: TrialEvent[] = (["techLead", "hiringManager", "prosecutor"] as const).map((criticId) => ({
+    type: "StatementMade",
+    round: 1,
+    criticId,
+    statement: "Koniec",
+    revisedScore: null,
+  }));
+  // Wszyscy po 7, bez debaty: zaproszenie bez sporu, filtra ATS i zmian zdania.
+  const calm = replay([
+    { ...filed, debateRounds: 0 },
+    ...CRITIC_IDS.map((id): TrialEvent => ({ type: "AssessmentSubmitted", assessment: assessment(id, 7) })),
+    { type: "ProsecutionDelivered", speech: "x" },
+  ]);
+
+  it("zasady, role i zadania stale", () => {
+    expect({
+      RULES,
+      ASSESSMENT_TASK,
+      JUDGE_INSTRUCTIONS,
+      roles: CRITIC_IDS.map((id) => instructionsFor(criticById(id))),
+    }).toMatchSnapshot();
+  });
+
+  it("zadania z historia rozprawy", () => {
+    expect({
+      prosecution: prosecutionTask(replay(history.slice(0, 6))),
+      debateFirstSpeaker: debateTask(replay(history.slice(0, 7)), "ats"),
+      debate: debateTask(debated, "techLead"),
+      judgeRejectWithChanges: judged(finish),
+      judgeInviteWithoutChanges: judgeTask(calm, pendingVerdict(calm)),
+    }).toMatchSnapshot();
   });
 });
