@@ -37,6 +37,8 @@ export function worstCaseCostNanoUsd(request: StructuredRequest<unknown>): numbe
     ...request.documents.flatMap((d) => [d.name, d.text]),
     request.instructions,
     request.task,
+    request.retry?.previousOutput ?? "",
+    ...(request.retry?.problems ?? []),
     JSON.stringify(zodOutputFormat(request.schema).schema),
   ];
   const promptTokens = texts.reduce((sum, t) => sum + bytes(t), 0) + OVERHEAD_TOKENS;

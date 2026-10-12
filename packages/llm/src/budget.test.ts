@@ -42,6 +42,11 @@ describe("worstCaseCostNanoUsd", () => {
     const polish = worstCaseCostNanoUsd({ ...request, task: "żaż" });
     expect(polish - ascii).toBe(2 * haiku.cacheWrite);
   });
+
+  it("ponowienie kosztuje wiecej: odrzucona odpowiedz i problemy wracaja do promptu", () => {
+    const retry = worstCaseCostNanoUsd({ ...request, retry: { previousOutput: "1234", problems: ["ab", "c"] } });
+    expect(retry - worst).toBe(7 * haiku.cacheWrite);
+  });
 });
 
 describe("BudgetedLlmClient", () => {

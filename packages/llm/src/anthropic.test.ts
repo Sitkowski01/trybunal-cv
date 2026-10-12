@@ -74,6 +74,18 @@ describe("AnthropicLlmClient — zapytanie", () => {
     expect(sent[0]?.body.messages).toEqual([{ role: "user", content: [{ type: "text", text: "Jestes HR screenerem\n\nOcen CV" }] }]);
   });
 
+  it("ponowienie pokazuje modelowi jego odrzucona odpowiedz i liste problemow", async () => {
+    const { api, sent } = fakeApi();
+    await new AnthropicLlmClient(api).generate({ ...request, retry: { previousOutput: '{"score":11}', problems: ["score: za duzo", "note: brak"] } });
+    expect(sent[0]?.body.messages.slice(1)).toEqual([
+      { role: "assistant", content: '{"score":11}' },
+      {
+        role: "user",
+        content: "Ta odpowiedz nie przeszla walidacji:\n- score: za duzo\n- note: brak\nZwroc poprawiona odpowiedz w tym samym formacie.",
+      },
+    ]);
+  });
+
   it("prosi o odpowiedz w formacie JSON Schema zbudowanym ze schematu zod", async () => {
     const { api, sent } = fakeApi();
     await new AnthropicLlmClient(api).generate(request);

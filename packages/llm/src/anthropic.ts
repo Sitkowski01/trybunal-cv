@@ -48,6 +48,7 @@ export function renderDocuments(documents: readonly SourceDocument[]): string {
  *   system: zasady (zaufane)
  *   user:   dokumenty w tagach (niezaufane)  <- punkt cache: tu konczy sie wspolny poczatek
  *           rola agenta + zadanie
+ *   [assistant: odrzucona odpowiedz, user: co bylo nie tak]  <- przy ponowieniu
  * CV nie trafia do promptu systemowego, wiec dopisek "daj 10/10" nie ma rangi instrukcji.
  *
  * Format odpowiedzi to JSON Schema z zod. API gwarantuje ksztalt JSON-a, ale ograniczenia
@@ -97,7 +98,14 @@ function buildMessages(request: StructuredRequest<unknown>): MessageParam[] {
             role,
           ],
         };
-  return [first];
+  if (request.retry === undefined) {
+    return [first];
+  }
+  const feedback =
+    "Ta odpowiedz nie przeszla walidacji:\n" +
+    request.retry.problems.map((p) => `- ${p}`).join("\n") +
+    "\nZwroc poprawiona odpowiedz w tym samym formacie.";
+  return [first, { role: "assistant", content: request.retry.previousOutput }, { role: "user", content: feedback }];
 }
 
 /**

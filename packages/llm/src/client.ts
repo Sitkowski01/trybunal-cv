@@ -14,6 +14,12 @@ export interface SourceDocument {
   readonly text: string;
 }
 
+/** Poprzednia, odrzucona odpowiedz i powody — model zobaczy je jako swoja wypowiedz i uwagi. */
+export interface RetryFeedback {
+  readonly previousOutput: string;
+  readonly problems: readonly string[];
+}
+
 export interface StructuredRequest<T> {
   /** Do logow, kosztow i nagran, np. "assessment:hr". */
   readonly label: string;
@@ -26,6 +32,7 @@ export interface StructuredRequest<T> {
   /** Rola agenta (persona, rubryka) — juz za punktem cache, bo rozna u kazdego. */
   readonly instructions: string;
   readonly task: string;
+  readonly retry?: RetryFeedback;
   /** Schemat odpowiedzi; bez .transform(), bo transformacji nie da sie zapisac w JSON Schema. */
   readonly schema: z.ZodType<T>;
 }
@@ -58,7 +65,7 @@ export class LlmError extends Error {
   }
 }
 
-/** Odpowiedz nie jest JSON-em albo nie spelnia schematu — mozna ponowic. */
+/** Odpowiedz nie jest JSON-em albo nie spelnia schematu — mozna ponowic z RetryFeedback. */
 export class InvalidOutputError extends LlmError {
   override readonly name = "InvalidOutputError";
 
