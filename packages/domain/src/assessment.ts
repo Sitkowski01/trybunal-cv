@@ -49,22 +49,30 @@ const INVISIBLE = /[\u00AD\u200B-\u200D\u2060\uFEFF]/g;
 const SINGLE_QUOTES = /[\u2018\u2019\u201A\u201B]/g;
 const DOUBLE_QUOTES = /[\u201C\u201D\u201E\u201F]/g;
 const DASHES = /[\u2010-\u2015\u2212]/g;
+const FINAL_SIGMA = /\u03c2/g;
 
 /**
- * Tekst z PDF i tekst od modelu roznia sie zapisem, nie trescia: litery rozlozone na znak
- * i ogonek (NFD), miekkie laczniki, typograficzne cudzyslowy i myslniki. NFKC sklada litery,
- * reszte sprowadzamy do jednej postaci, potem biale znaki i male litery.
+ * Tekst z PDF i tekst od modelu roznia sie zapisem, nie trescia: litery zlozone albo rozlozone
+ * na znak i ogonek, miekkie laczniki, typograficzne cudzyslowy i myslniki. Sprowadzamy oba do
+ * jednej postaci. Dwa przypadki znalazl test wlasnosci na pelnym Unicode:
+ * - rozkladamy (NFKD) i usuwamy znaki diakrytyczne zamiast skladac (NFKC): skladanie potrafi
+ *   polaczyc sasiednie znaki w jeden (koreanskie "\u3141" + "\u314f" -> "\ub9c8"), wtedy fragment tekstu
+ *   przestaje byc fragmentem. Przy okazji "Zarzadzalem" od modelu pasuje do "Zarz\u0105dza\u0142em";
+ * - toLowerCase zalezy od kontekstu: wielka sigma na koncu slowa to "\u03c2", a sama \u2014 "\u03c3".
+ *   Jak w case folding z Unicode traktujemy obie jako "\u03c3".
  */
 const normalize = (s: string) =>
   s
-    .normalize("NFKC")
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
     .replace(INVISIBLE, "")
     .replace(SINGLE_QUOTES, "'")
     .replace(DOUBLE_QUOTES, '"')
     .replace(DASHES, "-")
     .replace(/\s+/g, " ")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(FINAL_SIGMA, "\u03c3");
 
 /**
  * Cytaty i poprawiane fragmenty, ktorych nie ma w CV. Model bywa przekonany, ze cytuje,

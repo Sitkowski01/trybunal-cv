@@ -120,6 +120,22 @@ describe("findInventedQuotes", () => {
     expect(findInventedQuotes(quoting("odpowiedzialny za wdrozenie"), pdf)).toEqual([]);
   });
 
+  it("sigma na koncu slowa i sama w cytacie to ta sama litera (kontrprzyklad z fast-check)", () => {
+    // Matematyczne "A" i "Σ": NFKC daje "AΣ", a toLowerCase zamienia koncowa sigme na "ς", samotna na "σ".
+    const cv = `${char(0x1d400)}${char(0x1d6f4)} `;
+    expect(findInventedQuotes(quoting(char(0x1d6f4)), cv)).toEqual([]);
+  });
+
+  it("sasiednie znaki, ktore normalizacja moglaby zlozyc, zostaja osobno (kontrprzyklad z fast-check)", () => {
+    // Koreanskie litery w zgodnosciowej postaci: NFKC zlozyloby je w jedna sylabe.
+    expect(findInventedQuotes(quoting(char(0x314f)), `${char(0x3141)}${char(0x314f)} `)).toEqual([]);
+  });
+
+  it("cytat bez polskich znakow pasuje do CV z nimi, ale l to nie l z kreska", () => {
+    expect(findInventedQuotes(quoting("Zarzadzalem zespolem"), "Zarządzałem zespołem")).toEqual(["Zarzadzalem zespolem"]);
+    expect(findInventedQuotes(quoting("Zarzadzałem zespołem"), "Zarządzałem zespołem")).toEqual([]);
+  });
+
   it("typograficzne cudzyslowy i myslniki to te same znaki co proste", () => {
     const cv = `Projekt ${char(0x201e)}Parkiet${char(0x201d)} ${char(0x2013)} gielda`;
     expect(findInventedQuotes(quoting('Projekt "Parkiet" - gielda'), cv)).toEqual([]);
