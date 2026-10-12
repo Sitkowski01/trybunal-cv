@@ -10,9 +10,22 @@ export interface DiffPart {
 
 const tokenize = (s: string) => s.split(/(\s+)/).filter((t) => t !== "");
 
+/**
+ * Tablica LCS ma (n+1)*(m+1) pol. Punkt CV (do 500 znakow) to ulamek megabajta, ale cale CV
+ * przed i po (ok. 20 tys. tokenow) to juz 1,6 GB. Powyzej limitu: calosc usunieta, calosc dodana.
+ */
+export const MAX_DIFF_TOKENS = 2000;
+
 export function wordDiff(before: string, after: string): DiffPart[] {
   const a = tokenize(before);
   const b = tokenize(after);
+  if (a.length > MAX_DIFF_TOKENS || b.length > MAX_DIFF_TOKENS) {
+    const whole: DiffPart[] = [
+      { kind: "removed", text: before },
+      { kind: "added", text: after },
+    ];
+    return whole.filter((p) => p.text !== "");
+  }
   const width = b.length + 1;
   // lcs[i * width + j] = dlugosc LCS dla a[i..] i b[j..]; jedna tablica zamiast tablicy tablic.
   const lcs = new Uint32Array((a.length + 1) * width);

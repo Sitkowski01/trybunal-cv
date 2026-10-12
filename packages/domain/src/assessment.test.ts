@@ -57,6 +57,11 @@ describe("AssessmentSchema", () => {
     expect(result.error?.issues[0]?.message).toBe("Poprawka niczego nie zmienia");
   });
 
+  it("mowi, dlaczego cytat jest odrzucony", () => {
+    const result = AssessmentSchema.safeParse({ ...valid, concerns: [{ quote: "2020", issue: "b", severity: "low" }] });
+    expect(result.error?.issues[0]?.message).toBe("Cytat musi zawierac litery");
+  });
+
   it("dopuszcza puste listy", () => {
     expect(parse({ strengths: [], concerns: [], rewrites: [] })).toBe(true);
   });

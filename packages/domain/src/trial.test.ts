@@ -124,9 +124,15 @@ describe("oceny niezalezne", () => {
   it("odrzuca ocene cytujaca cos, czego nie ma w CV", () => {
     const invented: TrialEvent = {
       type: "AssessmentSubmitted",
-      assessment: { ...assessment("hr"), concerns: [{ quote: "10 lat w Google", issue: "x", severity: "high" }] },
+      assessment: {
+        ...assessment("hr"),
+        concerns: [
+          { quote: "10 lat w Google", issue: "x", severity: "high" },
+          { quote: "lider zespolu", issue: "y", severity: "low" },
+        ],
+      },
     };
-    rejects([filed(), invented], /hr cytuje cos, czego nie ma w CV: 10 lat w Google/);
+    rejects([filed(), invented], /hr cytuje cos, czego nie ma w CV: 10 lat w Google \| lider zespolu$/);
   });
 
   it("oceny sa dostepne dopiero, gdy oceni kazdy krytyk", () => {

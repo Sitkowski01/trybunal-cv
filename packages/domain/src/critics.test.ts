@@ -46,8 +46,8 @@ describe("sklad trybunalu", () => {
     expect(criticById(id).id).toBe(id);
   });
 
-  it("criticById zwraca ten sam obiekt co lista", () => {
-    expect(criticById("hr")).toBe(CRITICS[1]);
+  it("criticById zwraca pelne dane krytyka", () => {
+    expect(criticById("hr")).toMatchObject({ name: "HR screener", role: "juror" });
   });
 });
 
