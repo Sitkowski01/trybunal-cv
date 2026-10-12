@@ -14,6 +14,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 | `packages/domain` | czysta logika rozprawy: skład trybunału, oceny, werdykt — bez IO |
 | `packages/llm` | klient modelu: adapter Claude, koszt i budżet, atrapa do testów, nagrania rozmów |
 | `packages/court` | orkiestracja rozprawy: prompty, oceny, debata, werdykt, ponowienia, CLI |
+| `apps/api` | serwer HTTP: wniesienie CV (tekst/PDF), anonimizacja, szyfrowany dziennik w Postgresie, strumień SSE |
 
 ## Jak działa rozprawa
 
@@ -75,6 +76,28 @@ Test na prawdziwym API uruchamia się tylko z kluczem:
   nie naprawi ponowienie (budżet, odmowa, anulowanie), kończy rozprawę zdarzeniem `TrialAborted`.
 - **Snapshoty pełnych promptów** — każda zmiana promptu jest widoczna w review jak zmiana kodu.
 
+## API
+
+`apps/api` (Fastify) prowadzi rozprawy w tle i pokazuje je na żywo.
+
+| Trasa | Co robi |
+|---|---|
+| `POST /trials` | wniesienie: JSON (`cvText`, `jobOffer`, `debateRounds`, `candidateName`) albo formularz z PDF w polu `cv`; 202 po zapisie |
+| `GET /trials/:id/events` | strumień SSE: zapisane zdarzenia, potem na żywo; wznawianie przez `Last-Event-ID`; na końcu `event: end` |
+| `GET /trials/:id` | stan rozprawy (bez tekstu CV i oferty) |
+| `POST /trials/:id/cancel` | anulowanie trwającej rozprawy |
+| `DELETE /trials/:id` | zapomnienie: usunięcie klucza rozprawy |
+
+- **Dane osobowe.** Przed rozprawą z CV i oferty znikają e-maile, telefony, PESEL, linki, adres,
+  data urodzenia oraz imię i nazwisko podane przy wniesieniu. Odpowiedź mówi, ile czego ukryto.
+- **Dziennik zdarzeń.** Każde zdarzenie w kopercie (numer, czas, wersja schematu, koszt wywołań
+  modelu); treść zaszyfrowana kluczem rozprawy (AES-256-GCM), klucz rozprawy — kluczem głównym.
+  Usunięcie klucza rozprawy czyni treść nieczytelną, a koszty zostają do statystyk.
+- **Limity.** Długość pól, rozprawy naraz, budżet rozprawy i dnia (trwające rezerwują pełny
+  budżet), liczba wniesień z jednego adresu na godzinę.
+- **Próba generalna** (`TRYBUNAL_REHEARSAL=1`): cała rozprawa bez modelu i bez klucza.
+- Konfiguracja: `.env.example`. Bez `DATABASE_URL` dziennik jest w pamięci.
+
 ## Uruchomienie
 
 Wymagania: Node 24, pnpm 11.
@@ -91,13 +114,20 @@ pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend
 # Ctrl+C przerywa rozprawę, ale zapisuje to, co już jest.
 # Odtworzenie nagrania bez klucza i bez kosztów:
 pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend.md --replay out/<id rozprawy>/cassette.json
+
+# Serwer API (konfiguracja z .env), np. bez modelu:
+TRYBUNAL_REHEARSAL=1 pnpm api
+curl -X POST localhost:3000/trials -H 'content-type: application/json' -d '{"cvText":"Java, Spring","jobOffer":"Junior Java"}'
+curl -N localhost:3000/trials/<id>/events
 ```
 
 ## Jakość
 
 - TypeScript w trybie `strict` z `noUncheckedIndexedAccess` i `exactOptionalPropertyTypes`.
 - Testy jednostkowe i property-based (Vitest, fast-check): losowe rozprawy, pełny Unicode,
-  optymalność diffu względem naiwnej rekurencji. Pokrycie min. 95%.
+  optymalność diffu względem naiwnej rekurencji, idempotencja anonimizacji. Pokrycie min. 95%.
+- Testy integracyjne na prawdziwym Postgresie (Testcontainers) — ten sam kontrakt dziennika
+  co implementacja w pamięci; SSE testowane na prawdziwym gnieździe.
 - Mutation testing (Stryker), próg 90%.
 - Reguły architektury (dependency-cruiser): domena nie korzysta z IO ani z innych pakietów,
   frontend nie zna warstwy LLM, brak cykli.
