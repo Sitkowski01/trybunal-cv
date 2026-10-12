@@ -77,6 +77,25 @@ describe("anonymize — tresc zawodowa zostaje", () => {
   });
 });
 
+describe("anonymize — czas", () => {
+  // Limit CV to 30 tys. znakow; zlosliwy tekst nie moze zablokowac serwera (kiedys: 1,9 s dla 30 tys. liter).
+  it.each([
+    ["litery bez @", "a".repeat(30_000)],
+    ["kropki i litery", "a.".repeat(15_000)],
+    ["prawie adres", "ul. Aaaa ".repeat(3_000)],
+    ["prawie e-mail", "a@b".repeat(10_000)],
+    ["cyfry z odstepami", "12 ".repeat(10_000)],
+  ])("%s: ponizej 300 ms", (_name, text) => {
+    const start = performance.now();
+    anonymize(text, "Anna Nowak");
+    expect(performance.now() - start).toBeLessThan(300);
+  });
+
+  it("dlugi adres e-mail i domena z wieloma kropkami nadal sa wykrywane", () => {
+    expect(anonymize(`${"a".repeat(64)}@mail.dzial.firma.example.com`).text).toBe("[EMAIL]");
+  });
+});
+
 describe("anonymize — imie i nazwisko", () => {
   it("zamienia calosc jako jedno, a czesci osobno, bez wzgledu na wielkosc liter", () => {
     const result = anonymize("Anna Nowak\nPani NOWAK prowadzila zespol. Anna lubi Jave.", "Anna Nowak");

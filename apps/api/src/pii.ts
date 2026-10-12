@@ -20,7 +20,13 @@ interface Rule {
 }
 
 const RULES: readonly Rule[] = [
-  { kind: "email", pattern: /[\p{L}\d._%+-]+@[\p{L}\d-]+(?:\.[\p{L}\d-]+)*\.\p{L}{2,}/gu, replacement: "[EMAIL]" },
+  // Wyrazenia bez zagniezdzonych nieograniczonych powtorzen: dlugi tekst bez "@" sprawdzany byl od kazdej litery
+  // do konca (czas kwadratowy — 100 tys. znakow to 26 s zablokowanego serwera). Lookbehind: start tylko na poczatku slowa.
+  {
+    kind: "email",
+    pattern: /(?<![\p{L}\d._%+-])[\p{L}\d._%+-]{1,64}@[\p{L}\d-]{1,63}(?:\.[\p{L}\d-]{1,63}){0,5}\.\p{L}{2,24}/gu,
+    replacement: "[EMAIL]",
+  },
   {
     kind: "link",
     // Bez \b na poczatku: po PESEL-u sklejonym z linkiem druga anonimizacja dalaby co innego niz pierwsza.
@@ -46,7 +52,7 @@ const RULES: readonly Rule[] = [
   { kind: "postalCode", pattern: /(?<!\d)\d{2}-\d{3}(?!\d)/gu, replacement: "[KOD POCZTOWY]" },
   {
     kind: "street",
-    pattern: /\b(?:ul|al|os|pl)\.\s*\p{Lu}[\p{L}.-]*(?:\s+\p{Lu}[\p{L}.-]*)*\s+\d+[a-z]?(?:\/\d+[a-z]?)?/gu,
+    pattern: /\b(?:ul|al|os|pl)\.\s*\p{Lu}[\p{L}.-]{0,40}(?:\s+\p{Lu}[\p{L}.-]{0,40}){0,4}\s+\d+[a-z]?(?:\/\d+[a-z]?)?/gu,
     replacement: "[ADRES]",
   },
 ];
