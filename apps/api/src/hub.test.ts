@@ -39,3 +39,31 @@ describe("TrialHub", () => {
     expect(heard).toEqual(["1", "2"]);
   });
 });
+
+describe("TrialHub — bledy i koniec", () => {
+  it("wyjatek sluchacza trafia do onListenerError, pozostali dostaja zdarzenie", () => {
+    const errors: unknown[] = [];
+    const hub = new TrialHub((e) => errors.push(e));
+    const heard: number[] = [];
+    hub.subscribe("t", () => { throw new Error("zerwany strumien"); });
+    hub.subscribe("t", (e) => heard.push(e.seq));
+    hub.publish(envelope("t", 1));
+    expect([errors, heard]).toEqual([[new Error("zerwany strumien")], [1]]);
+  });
+
+  it("stop powiadamia sluchaczy tej rozprawy; bez onStop nic sie nie dzieje", () => {
+    const hub = new TrialHub();
+    const stopped: string[] = [];
+    hub.subscribe("t", () => undefined, () => stopped.push("t"));
+    hub.subscribe("t", () => undefined);
+    hub.subscribe("inna", () => undefined, () => stopped.push("inna"));
+    hub.stop("t");
+    expect(stopped).toEqual(["t"]);
+  });
+
+  it("domyslnie bledy sluchaczy sa ignorowane, nie wychodza do rozprawy", () => {
+    const hub = new TrialHub();
+    hub.subscribe("t", () => { throw new Error("x"); }, () => { throw new Error("y"); });
+    expect(() => { hub.publish(envelope("t", 1)); hub.stop("t"); }).not.toThrow();
+  });
+});
