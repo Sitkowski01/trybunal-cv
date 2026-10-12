@@ -17,6 +17,8 @@ export interface AppOptions {
   readonly rateLimit: { readonly max: number; readonly timeWindowMs: number };
   readonly heartbeatMs?: number;
   readonly logger?: boolean;
+  /** Za proxy (Docker, nginx): adres klienta z X-Forwarded-For, inaczej wszyscy dziela jeden limit. */
+  readonly trustProxy?: boolean;
 }
 
 export const MAX_PDF_BYTES = 2 * 1024 * 1024;
@@ -29,7 +31,8 @@ const FileBody = z.object({
 });
 
 const TrialParams = z.object({ id: z.string().min(1).max(100) });
-const AfterSeq = z.coerce.number().int().min(0);
+// Gorna granica jak kolumna integer w Postgresie — wieksza liczba to blad bazy (500), a nie 400.
+const AfterSeq = z.coerce.number().int().min(0).max(2_147_483_647);
 
 class BadRequestError extends Error {
   constructor(readonly problems: readonly string[]) {
@@ -47,8 +50,13 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 
 export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const { service, journal, hub } = options;
-  const app = Fastify({ logger: options.logger ?? false });
-  await app.register(rateLimit, { global: false });
+  const app = Fastify({
+    trustProxy: options.trustProxy ?? false,
+    // Id rozprawy to jedyny klucz do jej odczytu i usuniecia — nie moze lezec w logach.
+    logger: options.logger === true && { serializers: { req: (req: { method: string; url: string }) => ({ method: req.method, url: redactIds(req.url) }) } },
+  });
+  // Lekki limit dla wszystkich tras (strumienie SSE kosztuja gniazdo i odczyt z bazy), ostry dla wniesien.
+  await app.register(rateLimit, { max: 120, timeWindow: 60_000 });
   await app.register(multipart, { limits: { fileSize: MAX_PDF_BYTES, files: 1, fields: 10 } });
 
   app.setErrorHandler((error, _request, reply) => sendError(reply, error));
@@ -74,6 +82,10 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   app.get("/trials/:id", async (request) => {
     const { id } = parse(TrialParams, request.params);
     const envelopes = await journal.read(id);
+    if (envelopes.length === 0) {
+      // Rozprawa zalozona, ale wniesienie nie zapisalo sie (awaria bazy przy wnoszeniu).
+      throw new TrialNotFoundError(`Rozprawa ${id} nie ma zapisanych zdarzen`);
+    }
     // Bez tekstu CV i oferty: kandydat je zna, a odpowiedz moze trafic do logow czy pamieci przegladarki.
     const s = replay(envelopes.map((e) => e.event));
     return {
@@ -105,7 +117,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   app.post("/trials/:id/cancel", async (request, reply) => {
     const { id } = parse(TrialParams, request.params);
     if (service.cancel(id)) return reply.code(202).send({ cancelled: true });
-    await journal.read(id, Number.MAX_SAFE_INTEGER);
+    await journal.assertReadable(id);
     return reply.code(409).send({ error: "Rozprawa juz sie zakonczyla" });
   });
 
@@ -124,13 +136,17 @@ async function readMultipart(parts: AsyncIterableIterator<import("@fastify/multi
     if (part.type === "file") {
       if (part.fieldname !== "cv") throw new BadRequestError([`${part.fieldname}: nieoczekiwany plik, CV wysylamy w polu "cv"`]);
       const bytes = await part.toBuffer();
+      if ("cvText" in fields) throw new BadRequestError(["cv: CV jako plik albo tekst, nie oba naraz"]);
       fields.cvText = await pdfToText(new Uint8Array(bytes));
     } else {
+      if (part.fieldname === "cvText" && "cvText" in fields) throw new BadRequestError(["cv: CV jako plik albo tekst, nie oba naraz"]);
       fields[part.fieldname] = part.value;
     }
   }
   return fields;
 }
+
+export const redactIds = (url: string) => url.replace(/\/trials\/[^/?]+/u, "/trials/:id");
 
 function sendError(reply: FastifyReply, error: unknown) {
   if (error instanceof BadRequestError || error instanceof InvalidTrialError) {

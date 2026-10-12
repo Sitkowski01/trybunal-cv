@@ -2,7 +2,7 @@ import type { LlmClient } from "@trybunal/llm";
 import type { FastifyInstance } from "fastify";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildApp, MAX_PDF_BYTES } from "./app.js";
+import { buildApp, MAX_PDF_BYTES, redactIds } from "./app.js";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
 import { Journal } from "./journal.js";
@@ -157,6 +157,67 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
     journal.read = () => Promise.reject(new Error("tajne szczegoly bazy"));
     const res = await app.inject({ url: "/trials/t-1" });
     expect([res.statusCode, res.json()]).toEqual([500, { error: "Blad serwera" }]);
+  });
+
+  it("numer wznowienia ponad zakres kolumny integer -> 400, nie blad bazy", async () => {
+    const { app } = await setup();
+    expect((await app.inject({ url: "/trials/t-1/events?after=2147483648" })).statusCode).toBe(400);
+  });
+
+  it("cancel zapomnianej rozprawy -> 410", async () => {
+    const { app, service } = await setup();
+    await app.inject({ method: "POST", url: "/trials", payload: body });
+    await service.settled("t-1");
+    await app.inject({ method: "DELETE", url: "/trials/t-1" });
+    expect((await app.inject({ method: "POST", url: "/trials/t-1/cancel" })).statusCode).toBe(410);
+  });
+
+  it("rozprawa bez zapisanego wniesienia -> 404, a nie 500", async () => {
+    const { app, journal } = await setup();
+    await journal.create("t-9");
+    const res = await app.inject({ url: "/trials/t-9" });
+    expect([res.statusCode, res.json()]).toEqual([404, { error: "Rozprawa t-9 nie ma zapisanych zdarzen" }]);
+  });
+
+  it("CV jako plik i jako tekst naraz -> 400, w dowolnej kolejnosci pol", async () => {
+    const { app } = await setup();
+    const fileFirst = await multipart({ jobOffer: "x" }, { name: "cv", bytes: await pdf("Java") });
+    const form = new FormData();
+    form.append("cv", new Blob([new Uint8Array(await pdf("Java"))], { type: "application/pdf" }), "cv.pdf");
+    form.append("cvText", "Java");
+    form.append("jobOffer", "x");
+    const request = new Request("http://x", { method: "POST", body: form });
+    const textAfter = { payload: Buffer.from(await request.arrayBuffer()), headers: { "content-type": request.headers.get("content-type") ?? "" } };
+    const textBefore = await multipart({ cvText: "Java", jobOffer: "x" }, { name: "cv", bytes: await pdf("Java") });
+    for (const form of [textBefore, textAfter]) {
+      const res = await app.inject({ method: "POST", url: "/trials", ...form });
+      expect([res.statusCode, res.json<{ problems: string[] }>().problems]).toEqual([400, ["cv: CV jako plik albo tekst, nie oba naraz"]]);
+    }
+    expect((await app.inject({ method: "POST", url: "/trials", ...fileFirst })).statusCode).toBe(202);
+  });
+
+  it("zamykany serwer -> 503 dla nowych wniesien", async () => {
+    const { app, service } = await setup();
+    await service.close();
+    expect((await app.inject({ method: "POST", url: "/trials", payload: body })).statusCode).toBe(503);
+  });
+
+  it("id rozprawy wyciete z adresow w logach", () => {
+    expect(redactIds("/trials/3c62-ab/events?after=2")).toBe("/trials/:id/events?after=2");
+    expect(redactIds("/trials/abc")).toBe("/trials/:id");
+    expect(redactIds("/trials")).toBe("/trials");
+  });
+
+  it("za proxy limit liczony per adres klienta z X-Forwarded-For", async () => {
+    const journal = new Journal(new InMemoryEventStore(), newKey());
+    const hub = new TrialHub();
+    const service = new TrialService({ journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3 });
+    app = await buildApp({ service, journal, hub, rateLimit: { max: 1, timeWindowMs: 60_000 }, trustProxy: true });
+    const post = (ip: string) => app?.inject({ method: "POST", url: "/trials", payload: body, headers: { "x-forwarded-for": ip } });
+    expect((await post("10.0.0.1"))?.statusCode).toBe(202);
+    expect((await post("10.0.0.2"))?.statusCode).toBe(202);
+    expect((await post("10.0.0.1"))?.statusCode).toBe(429);
+    await service.close();
   });
 
   it("GET /health", async () => {

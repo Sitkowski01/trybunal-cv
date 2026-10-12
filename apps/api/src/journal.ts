@@ -75,6 +75,11 @@ export class Journal {
     });
   }
 
+  /** TrialNotFoundError / TrialForgottenError, gdy rozprawy nie da sie odczytac. */
+  async assertReadable(trialId: string): Promise<void> {
+    await this.key(trialId);
+  }
+
   /** Usuwa klucz rozprawy (RODO). false, gdy rozprawy nie ma. */
   forget(trialId: string): Promise<boolean> {
     return this.store.forget(trialId);
