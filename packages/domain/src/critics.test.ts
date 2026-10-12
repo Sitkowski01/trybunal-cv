@@ -30,6 +30,14 @@ describe("sklad trybunalu", () => {
     }
   });
 
+  it("kazdy krytyk ma trzy rozne, niepuste kryteria", () => {
+    for (const critic of CRITICS) {
+      expect(critic.criteria).toHaveLength(3);
+      expect(new Set(critic.criteria).size).toBe(3);
+      expect(critic.criteria.every((c) => c.trim() !== "")).toBe(true);
+    }
+  });
+
   it("nazwy krytykow sa unikalne", () => {
     expect(new Set(CRITICS.map((c) => c.name)).size).toBe(CRITICS.length);
   });
