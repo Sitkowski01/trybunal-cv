@@ -1,0 +1,31 @@
+{
+  "name": "@trybunal/court",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "mutation": "stryker run"
+  },
+  "dependencies": {
+    "@trybunal/domain": "workspace:*",
+    "@trybunal/llm": "workspace:*",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/typescript-checker": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "fast-check": "4.10.2",
+    "vitest": "4.1.11"
+  }
+}

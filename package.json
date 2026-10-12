@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "arch": "depcruise packages --config .dependency-cruiser.cjs",
     "mutation": "pnpm -r mutation",
-    "check": "pnpm typecheck && pnpm lint && pnpm arch && pnpm test"
+    "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
