@@ -21,14 +21,15 @@ afterEach(async () => {
   app = undefined;
 });
 
-async function setup(overrides: Partial<ServiceOptions> = {}, rateLimitMax = 100) {
+async function setup(overrides: Partial<ServiceOptions> = {}, rateLimitMax = 100, logs?: string[]) {
   const journal = new Journal(new InMemoryEventStore(), newKey());
   const hub = new TrialHub();
   let ids = 0;
   const service = new TrialService({
     journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3, newId: () => `t-${String(++ids)}`, ...overrides,
   });
-  app = await buildApp({ service, journal, hub, rateLimit: { max: rateLimitMax, timeWindowMs: 60_000 }, heartbeatMs: 20 });
+  const logStream = logs === undefined ? undefined : { write: (line: string) => { logs.push(line); } };
+  app = await buildApp({ service, journal, hub, rateLimit: { max: rateLimitMax, timeWindowMs: 60_000 }, heartbeatMs: 20, ...(logStream === undefined ? {} : { logStream }) });
   return { app, service, journal, hub };
 }
 
@@ -139,9 +140,11 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
   it("cancel trwajacej -> 202, zakonczonej -> 409", async () => {
     const { app, service } = await setup({ llm: () => hanging });
     await app.inject({ method: "POST", url: "/trials", payload: body });
-    expect((await app.inject({ method: "POST", url: "/trials/t-1/cancel" })).statusCode).toBe(202);
+    const cancelled = await app.inject({ method: "POST", url: "/trials/t-1/cancel" });
+    expect([cancelled.statusCode, cancelled.json()]).toEqual([202, { cancelled: true }]);
     await service.settled("t-1");
-    expect((await app.inject({ method: "POST", url: "/trials/t-1/cancel" })).statusCode).toBe(409);
+    const again = await app.inject({ method: "POST", url: "/trials/t-1/cancel" });
+    expect([again.statusCode, again.json()]).toEqual([409, { error: "Rozprawa juz sie zakonczyla" }]);
   });
 
   it("DELETE zapomina rozprawe: 204, potem 410 przy odczycie", async () => {
@@ -223,5 +226,104 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
   it("GET /health", async () => {
     const { app } = await setup();
     expect((await app.inject({ url: "/health" })).json()).toEqual({ ok: true });
+  });
+});
+
+describe("odpowiedzi bledow — tresc", () => {
+  it.each([
+    ["GET", "/trials/x", 404, { error: "Nie ma rozprawy x" }],
+    ["DELETE", "/trials/x", 404, { error: "Nie ma rozprawy x" }],
+    ["GET", "/trials/x/events?after=-1", 400, { error: "Niepoprawne dane", problems: ["(calosc): Too small: expected number to be >=0"] }],
+  ] as const)("%s %s -> %i z trescia", async (method, url, status, json) => {
+    const { app } = await setup();
+    const res = await app.inject({ method, url });
+    expect([res.statusCode, res.json()]).toEqual([status, json]);
+  });
+
+  it("zapomniana -> 410 z komunikatem; zajety sad -> 429 i 503 z komunikatem", async () => {
+    const { app } = await setup({ llm: () => hanging, maxRunning: 1 });
+    await app.inject({ method: "POST", url: "/trials", payload: body });
+    const busy = await app.inject({ method: "POST", url: "/trials", payload: body });
+    expect(busy.json()).toEqual({ error: "Sad prowadzi juz 1 rozpraw — sprobuj za chwile" });
+    await app.inject({ method: "DELETE", url: "/trials/t-1" });
+    expect((await app.inject({ url: "/trials/t-1" })).json()).toEqual({ error: "Rozprawa t-1 zostala zapomniana na zadanie kandydata" });
+    const broke = await setup({ trialBudgetNanoUsd: 2e10 });
+    expect((await broke.app.inject({ method: "POST", url: "/trials", payload: body })).json()).toEqual({ error: "Dzienny budzet sadu jest wyczerpany — wroc jutro" });
+  });
+
+  it("plik w zlym polu -> 400 z nazwa pola", async () => {
+    const { app } = await setup();
+    const wrong = await multipart({ jobOffer: "x" }, { name: "zdjecie", bytes: await pdf("x") });
+    expect((await app.inject({ method: "POST", url: "/trials", ...wrong })).json()).toEqual({
+      error: "Niepoprawne dane",
+      problems: ['zdjecie: nieoczekiwany plik, CV wysylamy w polu "cv"'],
+    });
+  });
+
+  it("blad Fastify 4xx przechodzi z wlasnym kodem i komunikatem (zly JSON -> 400)", async () => {
+    const { app } = await setup();
+    const res = await app.inject({ method: "POST", url: "/trials", payload: "{zly", headers: { "content-type": "application/json" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: string }>().error).toMatch(/JSON/u);
+  });
+
+  it.each([302, 500, 503])("blad z kodem %i spoza 4xx -> 500 bez szczegolow, zalogowany", async (statusCode) => {
+    const logs: string[] = [];
+    const { app, journal } = await setup({}, 100, logs);
+    journal.read = () => Promise.reject(Object.assign(new Error("tajne szczegoly"), { statusCode }));
+    const res = await app.inject({ url: "/trials/t-1" });
+    expect([res.statusCode, res.json()]).toEqual([500, { error: "Blad serwera" }]);
+    expect(logs.some((l) => l.includes("tajne szczegoly") && l.includes('"level":50'))).toBe(true);
+  });
+});
+
+describe("limity i logi", () => {
+  it("PDF do 2 MB przechodzi (domyslny limit wtyczki to 1 MB)", async () => {
+    const { app, service } = await setup();
+    const bytes = await pdf("Java");
+    const padded = new Uint8Array(1_500_000);
+    padded.set(bytes);
+    padded.fill(32, bytes.length);
+    const res = await app.inject({ method: "POST", url: "/trials", ...(await multipart({ jobOffer: "x" }, { name: "cv", bytes: padded })) });
+    expect(res.statusCode).toBe(202);
+    await service.settled("t-1");
+  });
+
+  it("drugi plik albo ponad 10 pol -> 413", async () => {
+    const { app } = await setup();
+    const form = new FormData();
+    form.append("cv", new Blob([new Uint8Array(await pdf("a"))]), "a.pdf");
+    form.append("cv", new Blob([new Uint8Array(await pdf("b"))]), "b.pdf");
+    const request = new Request("http://x", { method: "POST", body: form });
+    const twoFiles = { payload: Buffer.from(await request.arrayBuffer()), headers: { "content-type": request.headers.get("content-type") ?? "" } };
+    expect((await app.inject({ method: "POST", url: "/trials", ...twoFiles })).statusCode).toBe(413);
+    const fields = Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`pole${String(i)}`, "x"]));
+    expect((await app.inject({ method: "POST", url: "/trials", ...(await multipart(fields)) })).statusCode).toBe(413);
+  });
+
+  it("lekki limit na wszystkich trasach: 121. zapytanie w minucie -> 429", async () => {
+    const { app } = await setup();
+    for (let i = 0; i < 120; i++) await app.inject({ url: "/health" });
+    expect((await app.inject({ url: "/health" })).statusCode).toBe(429);
+  });
+
+  it("bez trustProxy limit liczy sie per polaczenie, X-Forwarded-For nic nie zmienia", async () => {
+    const { app, service } = await setup({}, 1);
+    const post = (ip: string) => app.inject({ method: "POST", url: "/trials", payload: body, headers: { "x-forwarded-for": ip } });
+    expect((await post("10.0.0.1")).statusCode).toBe(202);
+    expect((await post("10.0.0.2")).statusCode).toBe(429);
+    await service.settled("t-1");
+  });
+
+  it("logi maja adresy bez id rozprawy, a strumien SSE nie konczy sie bledem odpowiedzi", async () => {
+    const logs: string[] = [];
+    const { app, service } = await setup({}, 100, logs);
+    await app.inject({ method: "POST", url: "/trials", payload: body });
+    await service.settled("t-1");
+    await app.inject({ url: "/trials/t-1/events" });
+    const all = logs.join("");
+    expect(all).toContain('"url":"/trials/:id/events"');
+    expect(all).not.toContain("t-1");
+    expect(logs.filter((l) => /"level":(40|50)/u.test(l))).toEqual([]);
   });
 });
