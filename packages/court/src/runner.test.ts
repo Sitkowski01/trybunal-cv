@@ -6,6 +6,7 @@ import {
   type FakeScript,
   IncompleteOutputError,
   type LlmClient,
+  LlmTransportError,
   type LlmResult,
   type StructuredRequest,
 } from "@trybunal/llm";
@@ -82,6 +83,25 @@ describe("runTrial — przebieg", () => {
     expect(seen[0]).toEqual(["TrialFiled", "assessing"]);
     expect(seen[5]).toEqual(["AssessmentSubmitted", "prosecution"]);
     expect(seen.at(-1)).toEqual(["VerdictAnnounced", "closed"]);
+  });
+
+  it("onEvent dostaje proby, ktore wyprodukowaly zdarzenie — kazda dokladnie raz", async () => {
+    const lying: FakeScript = (req, i) =>
+      req.label === "assessment:hr" && req.retry === undefined
+        ? { score: 6, summary: "ok", strengths: [], concerns: [{ quote: "10 lat w Google", issue: "x", severity: "low" }], rewrites: [] }
+        : happy(req, i);
+    const seen: [string, string[]][] = [];
+    const run = await runTrial(input, {
+      llm: new FakeLlmClient(lying),
+      onEvent: (e, _s, calls) => seen.push([e.type, calls.map((c) => `${c.label}#${String(c.attempt)}`)]),
+    });
+    expect(seen[0]).toEqual(["TrialFiled", []]);
+    // Odrzucona proba HR tez kosztowala — idzie do zdarzenia jego oceny.
+    expect(seen[1]).toEqual(["AssessmentSubmitted", ["assessment:hr#1", "assessment:hr#2"]]);
+    expect(seen.find(([t]) => t === "ProsecutionDelivered")?.[1]).toEqual(["prosecution#1"]);
+    expect(seen.find(([t]) => t === "StatementMade")?.[1]).toEqual(["statement:1:ats#1"]);
+    expect(seen.at(-1)).toEqual(["VerdictAnnounced", ["justification#1"]]);
+    expect(seen.flatMap(([, c]) => c)).toHaveLength(run.calls.length);
   });
 
   it("wyjatek obserwatora (np. zerwany strumien) nie przerywa rozprawy i trafia do onObserverError", async () => {
@@ -166,6 +186,26 @@ describe("runTrial — rownoleglosc", () => {
     const result = await run;
     expect(result.state).toMatchObject({ phase: "aborted", abortReason: "Odpowiedz modelu przerwana: refusal" });
     expect(result.events.filter((e) => e.type === "AssessmentSubmitted")).toHaveLength(2);
+  });
+
+  it("przerwanie dostaje wszystkie nieprzypisane proby, rowniez krytykow anulowanych w polowie", async () => {
+    const { llm: base, settle } = manual();
+    // Jak adapter Claude: anulowane zapytanie moglo juz kosztowac, wiec trafia do rejestru.
+    const llm: LlmClient = {
+      generate: (req, signal) =>
+        base.generate(req, signal).catch(() => Promise.reject(new LlmTransportError("anulowano", false, true))),
+    };
+    const aborted: string[] = [];
+    const run = runTrial(input, {
+      llm,
+      onEvent: (e, _s, calls) => {
+        if (e.type === "TrialAborted") aborted.push(...calls.map((c) => c.label));
+      },
+    });
+    await settle("assessment:hr");
+    await settle("assessment:prosecutor", new IncompleteOutputError("refusal", "claude-sonnet-5-5", FAKE_USAGE));
+    await run;
+    expect(aborted.sort()).toEqual(["assessment:ats", "assessment:hiringManager", "assessment:prosecutor", "assessment:techLead"]);
   });
 });
 

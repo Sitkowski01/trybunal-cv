@@ -41,8 +41,11 @@ export interface RunOptions {
   readonly config?: CourtConfig;
   readonly signal?: AbortSignal;
   readonly sleep?: (ms: number) => Promise<void>;
-  /** Kazde zdarzenie zaraz po zastosowaniu — tu podlaczy sie API (SSE) i scena. */
-  readonly onEvent?: (event: TrialEvent, state: TrialState) => void;
+  /**
+   * Kazde zdarzenie zaraz po zastosowaniu — tu podlaczy sie API (SSE) i scena. calls: proby zapytan,
+   * ktore wyprodukowaly to zdarzenie (tokeny, koszt); kazda proba trafia do dokladnie jednego zdarzenia.
+   */
+  readonly onEvent?: (event: TrialEvent, state: TrialState, calls: readonly CallRecord[]) => void;
   /** Blad obserwatora (np. zerwany strumien SSE) nie przerywa rozprawy — trafia tutaj. */
   readonly onObserverError?: (error: unknown) => void;
 }
@@ -66,20 +69,25 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
   let state = fileTrial(filed);
   const events: TrialEvent[] = [filed];
   // Rozprawa jest juz oplacona i zapisana w dzienniku — obserwator nie moze jej przerwac.
-  const notify = (event: TrialEvent) => {
+  const notify = (event: TrialEvent, stepCalls: readonly CallRecord[]) => {
     try {
-      options.onEvent?.(event, state);
+      options.onEvent?.(event, state, stepCalls);
     } catch (error) {
       options.onObserverError?.(error);
     }
   };
-  notify(filed);
+  notify(filed, []);
 
-  const emit = (event: TrialEvent) => {
+  // Proby przypisane juz do zdarzen. Zdarzenie bez etykiety (przerwanie) dostaje wszystkie pozostale,
+  // w tym proby krytykow anulowanych w polowie — za nie tez zaplacilismy.
+  const attributed = new Set<CallRecord>();
+  const emit = (event: TrialEvent, label?: string) => {
     const parsed = TrialEventSchema.parse(event);
     state = evolve(state, parsed);
     events.push(parsed);
-    notify(parsed);
+    const stepCalls = calls.filter((c) => !attributed.has(c) && (label === undefined || c.label === label));
+    stepCalls.forEach((c) => attributed.add(c));
+    notify(parsed, stepCalls);
   };
 
   const question = <T>(signal: AbortSignal | undefined, request: Omit<StructuredRequest<T>, "rules" | "documents">, validate?: (d: T) => string[]) =>
@@ -105,7 +113,7 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
       (o) => findInventedQuotes({ ...o, criticId }, state.cvText).map((q) => `Cytat "${q}" nie wystepuje doslownie w CV`),
     );
     const assessment: Assessment = { ...output, criticId };
-    emit({ type: "AssessmentSubmitted", assessment });
+    emit({ type: "AssessmentSubmitted", assessment }, `assessment:${criticId}`);
   };
 
   try {
@@ -123,18 +131,19 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
       task: prosecutionTask(state),
       schema: ProsecutionOutput,
     });
-    emit({ type: "ProsecutionDelivered", speech });
+    emit({ type: "ProsecutionDelivered", speech }, "prosecution");
 
     for (let speaker = nextSpeaker(state); speaker !== null; speaker = nextSpeaker(state)) {
+      const label = `statement:${String(state.round)}:${speaker}`;
       const { statement, revisedScore } = await question(options.signal, {
-        label: `statement:${String(state.round)}:${speaker}`,
+        label,
         model: config.models.statement,
         maxTokens: config.maxTokens.statement,
         instructions: instructionsFor(criticById(speaker)),
         task: debateTask(state, speaker),
         schema: StatementOutput,
       });
-      emit({ type: "StatementMade", round: state.round, criticId: speaker, statement, revisedScore });
+      emit({ type: "StatementMade", round: state.round, criticId: speaker, statement, revisedScore }, label);
     }
 
     const { justification } = await question(options.signal, {
@@ -145,7 +154,7 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
       task: judgeTask(state, pendingVerdict(state)),
       schema: JustificationOutput,
     });
-    emit(announceVerdict(state, justification));
+    emit(announceVerdict(state, justification), "justification");
   } catch (error) {
     // Rozprawa jest tu zawsze w toku: obserwator nie rzuca, a werdykt to ostatni krok w try.
     emit({ type: "TrialAborted", reason: abortReason(error, options.signal) });
