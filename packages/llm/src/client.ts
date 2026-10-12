@@ -42,6 +42,9 @@ export interface LlmResult<T> {
   readonly model: ModelId;
   readonly usage: TokenUsage;
   readonly costNanoUsd: number;
+  /** Id zapytania po stronie dostawcy — do szukania w logach; atrapa go nie ma. */
+  readonly requestId: string | null;
+  readonly durationMs: number;
 }
 
 export interface LlmClient {

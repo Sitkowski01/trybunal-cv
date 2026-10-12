@@ -56,7 +56,10 @@ export function renderDocuments(documents: readonly SourceDocument[]): string {
  * zawsze przechodzi przez pelny schemat w parseOutput.
  */
 export class AnthropicLlmClient implements LlmClient {
-  constructor(private readonly messages: MessagesApi) {}
+  constructor(
+    private readonly messages: MessagesApi,
+    private readonly now: () => number = Date.now,
+  ) {}
 
   static fromApiKey(apiKey: string): AnthropicLlmClient {
     return new AnthropicLlmClient(new Anthropic(sdkOptions(apiKey)).messages);
@@ -70,6 +73,7 @@ export class AnthropicLlmClient implements LlmClient {
       messages: buildMessages(request),
       output_config: { format: { type: "json_schema", schema: zodOutputFormat(request.schema).schema } },
     };
+    const started = this.now();
     let message: Message;
     try {
       message = await this.messages.create(body, signal === undefined ? undefined : { signal });
@@ -82,7 +86,14 @@ export class AnthropicLlmClient implements LlmClient {
     }
     const raw = message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
     const data = parseOutput(raw, request.schema, request.model, usage);
-    return { data, model: request.model, usage, costNanoUsd: costNanoUsd(request.model, usage) };
+    return {
+      data,
+      model: request.model,
+      usage,
+      costNanoUsd: costNanoUsd(request.model, usage),
+      requestId: message.id,
+      durationMs: this.now() - started,
+    };
   }
 }
 

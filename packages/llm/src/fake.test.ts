@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { InvalidOutputError, type StructuredRequest } from "./client.js";
-import { byLabel, FAKE_USAGE, FakeLlmClient } from "./fake.js";
+import { byLabel, FAKE_USAGE, FakeLlmClient, raw } from "./fake.js";
 import { costNanoUsd } from "./pricing.js";
 
 const Answer = z.object({ score: z.number().int().min(1).max(10), note: z.string().trim().min(1) });
@@ -26,6 +26,8 @@ describe("FakeLlmClient", () => {
       model: "claude-haiku-5-5",
       usage: FAKE_USAGE,
       costNanoUsd: costNanoUsd("claude-haiku-5-5", FAKE_USAGE),
+      requestId: null,
+      durationMs: 0,
     });
     expect(llm.calls.map((c) => c.label)).toEqual(["assessment:hr"]);
   });
@@ -35,9 +37,12 @@ describe("FakeLlmClient", () => {
     await expect(llm.generate(request("a"))).rejects.toBeInstanceOf(InvalidOutputError);
   });
 
-  it("odpowiedz jako tekst trafia do parsera bez zmian", async () => {
-    const llm = new FakeLlmClient(() => "to nie JSON");
-    await expect(llm.generate(request("a"))).rejects.toMatchObject({ rawOutput: "to nie JSON" });
+  it("raw() podaje surowy tekst prosto do parsera, a zwykly napis to dane", async () => {
+    await expect(new FakeLlmClient(() => raw("to nie JSON")).generate(request("a"))).rejects.toMatchObject({
+      rawOutput: "to nie JSON",
+    });
+    const text = { ...request("a"), schema: z.string() };
+    expect((await new FakeLlmClient(() => "zwykly napis").generate(text)).data).toBe("zwykly napis");
   });
 
   it("skrypt dostaje numer wywolania i wlasne zuzycie tokenow", async () => {
@@ -48,12 +53,11 @@ describe("FakeLlmClient", () => {
     expect((await llm.generate(request("a"))).usage).toBe(usage);
   });
 
-  it("skrypt rzucajacy napisem daje zwykly Error", async () => {
+  it("blad rzucony przez skrypt wychodzi jako odrzucenie", async () => {
     const llm = new FakeLlmClient(() => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error -- celowo: skrypt testu moze rzucic czymkolwiek
-      throw "awaria";
+      throw new Error("awaria");
     });
-    await expect(llm.generate(request("a"))).rejects.toThrow(new Error("awaria"));
+    await expect(llm.generate(request("a"))).rejects.toThrow("awaria");
   });
 
   it("nieznana etykieta to blad testu, a nie cicha pusta odpowiedz", async () => {

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { BudgetedLlmClient, BudgetExceededError, OVERHEAD_TOKENS, worstCaseCostNanoUsd } from "./budget.js";
 import { InvalidOutputError, type LlmClient, type LlmResult, LlmTransportError, type StructuredRequest } from "./client.js";
-import { FAKE_USAGE, FakeLlmClient } from "./fake.js";
+import { FAKE_USAGE, FakeLlmClient, raw } from "./fake.js";
 import { costNanoUsd, MODELS } from "./pricing.js";
 
 const Answer = z.object({ ok: z.boolean() });
@@ -74,7 +74,7 @@ describe("BudgetedLlmClient", () => {
   });
 
   it("odrzucona odpowiedz modelu kosztuje tyle, ile zuzyla", async () => {
-    const llm = new BudgetedLlmClient(new FakeLlmClient(() => "nie JSON"), 10 * worst);
+    const llm = new BudgetedLlmClient(new FakeLlmClient(() => raw("nie JSON")), 10 * worst);
     await expect(llm.generate(request)).rejects.toBeInstanceOf(InvalidOutputError);
     expect(llm.spentNanoUsd).toBe(actual);
   });
@@ -104,7 +104,7 @@ describe("BudgetedLlmClient", () => {
     const llm = new BudgetedLlmClient(slow, 2 * worst - 1);
     const first = llm.generate(request);
     await expect(llm.generate(request)).rejects.toMatchObject({ reservedNanoUsd: worst });
-    finish({ data: { ok: true }, model: "claude-haiku-5-5", usage: FAKE_USAGE, costNanoUsd: actual });
+    finish({ data: { ok: true }, model: "claude-haiku-5-5", usage: FAKE_USAGE, costNanoUsd: actual, requestId: null, durationMs: 0 });
     await first;
     expect(llm.spentNanoUsd).toBe(actual);
   });

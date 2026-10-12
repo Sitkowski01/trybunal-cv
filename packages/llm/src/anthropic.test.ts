@@ -47,6 +47,11 @@ function fakeApi(reply: Reply | Error = {}) {
   return { api, sent };
 }
 
+const ticking = () => {
+  let t = 1000;
+  return () => (t += 250);
+};
+
 describe("AnthropicLlmClient — zapytanie", () => {
   it("zasady w prompcie systemowym, dokumenty w wiadomosci z punktem cache, rola i zadanie za nim", async () => {
     const { api, sent } = fakeApi();
@@ -123,15 +128,17 @@ describe("renderDocuments", () => {
 });
 
 describe("AnthropicLlmClient — odpowiedz", () => {
-  it("zwraca dane po schemacie, tokeny z cache i koszt", async () => {
+  it("zwraca dane po schemacie, tokeny z cache, koszt, id zapytania i czas", async () => {
     const { api } = fakeApi({ usage: { cache_creation_input_tokens: 500 } });
-    const result = await new AnthropicLlmClient(api).generate(request);
+    const result = await new AnthropicLlmClient(api, ticking()).generate(request);
     const usage = { inputTokens: 300, outputTokens: 40, cacheWriteTokens: 500, cacheReadTokens: 2000 };
     expect(result).toEqual({
       data: { score: 7 },
       model: "claude-sonnet-5-5",
       usage,
       costNanoUsd: costNanoUsd("claude-sonnet-5-5", usage),
+      requestId: "msg_123",
+      durationMs: 250,
     });
   });
 

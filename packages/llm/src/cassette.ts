@@ -12,6 +12,8 @@ export const CassetteEntrySchema = z.object({
   label: z.string().min(1),
   model: z.string().refine(isModelId, { message: "Nieznany model" }),
   data: z.unknown(),
+  requestId: z.string().nullable(),
+  durationMs: count,
   usage: z.object({
     inputTokens: count,
     outputTokens: count,
@@ -69,7 +71,8 @@ export class ReplayLlmClient implements LlmClient {
         throw new Error(`Nagranie "${request.label}" zrobiono modelem ${entry.model}, a nie ${request.model}`);
       }
       const data = parseOutput(JSON.stringify(entry.data), request.schema, request.model, entry.usage);
-      resolve({ data, model: request.model, usage: entry.usage, costNanoUsd: entry.costNanoUsd });
+      const { usage, costNanoUsd, requestId, durationMs } = entry;
+      resolve({ data, model: request.model, usage, costNanoUsd, requestId, durationMs });
     });
   }
 }
