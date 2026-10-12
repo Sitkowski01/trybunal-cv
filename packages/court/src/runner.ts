@@ -17,7 +17,7 @@ import type { LlmClient, StructuredRequest } from "@trybunal/llm";
 import type { z } from "zod";
 import { ask, type CallRecord } from "./ask.js";
 import { abortReason, allOrNothing, sleep } from "./control.js";
-import { AssessmentOutput, type CourtConfig, DEFAULT_CONFIG, JustificationOutput, ProsecutionOutput, StatementOutput } from "./config.js";
+import { AssessmentOutput, cacheLeader, type CourtConfig, DEFAULT_CONFIG, JustificationOutput, ProsecutionOutput, StatementOutput } from "./config.js";
 import {
   ASSESSMENT_TASK,
   debateTask,
@@ -43,6 +43,8 @@ export interface RunOptions {
   readonly sleep?: (ms: number) => Promise<void>;
   /** Kazde zdarzenie zaraz po zastosowaniu — tu podlaczy sie API (SSE) i scena. */
   readonly onEvent?: (event: TrialEvent, state: TrialState) => void;
+  /** Blad obserwatora (np. zerwany strumien SSE) nie przerywa rozprawy — trafia tutaj. */
+  readonly onObserverError?: (error: unknown) => void;
 }
 
 export interface TrialRun {
@@ -63,13 +65,21 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
   const filed = TrialEventSchema.parse({ type: "TrialFiled", ...input });
   let state = fileTrial(filed);
   const events: TrialEvent[] = [filed];
-  options.onEvent?.(filed, state);
+  // Rozprawa jest juz oplacona i zapisana w dzienniku — obserwator nie moze jej przerwac.
+  const notify = (event: TrialEvent) => {
+    try {
+      options.onEvent?.(event, state);
+    } catch (error) {
+      options.onObserverError?.(error);
+    }
+  };
+  notify(filed);
 
   const emit = (event: TrialEvent) => {
     const parsed = TrialEventSchema.parse(event);
     state = evolve(state, parsed);
     events.push(parsed);
-    options.onEvent?.(parsed, state);
+    notify(parsed);
   };
 
   const question = <T>(signal: AbortSignal | undefined, request: Omit<StructuredRequest<T>, "rules" | "documents">, validate?: (d: T) => string[]) =>
@@ -99,9 +109,10 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
   };
 
   try {
-    // Pierwszy krytyk sam: cache wspolnego poczatku powstaje dopiero, gdy jego odpowiedz ruszy.
-    const [first, ...rest] = CRITIC_IDS;
-    await assess(first, options.signal);
+    // Lider sam: cache wspolnego poczatku powstaje dopiero, gdy jego odpowiedz ruszy.
+    const leader = cacheLeader(config.models.assessment);
+    await assess(leader, options.signal);
+    const rest = CRITIC_IDS.filter((id) => id !== leader);
     await allOrNothing(rest, (id, signal) => assess(id, signal), options.signal);
 
     const { speech } = await question(options.signal, {
@@ -136,7 +147,9 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
     });
     emit(announceVerdict(state, justification));
   } catch (error) {
-    emit({ type: "TrialAborted", reason: abortReason(error, options.signal) });
+    if (state.phase !== "closed" && state.phase !== "aborted") {
+      emit({ type: "TrialAborted", reason: abortReason(error, options.signal) });
+    }
   }
   return { state, events, calls };
 }

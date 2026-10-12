@@ -21,7 +21,6 @@ export async function allOrNothing<T>(
       run(item, signal).catch((error: unknown) => {
         cause ??= { error };
         local.abort();
-        throw error;
       }),
     ),
   );
@@ -35,6 +34,8 @@ export const MAX_REASON = 500;
 
 /** Powod przerwania do zdarzenia: anulowanie z zewnatrz ma pierwszenstwo przed bledem, ktory wywolalo. */
 export function abortReason(error: unknown, signal?: AbortSignal): string {
-  const reason = signal?.aborted === true ? "Rozprawa anulowana" : error instanceof Error ? error.message : String(error);
+  const message = signal?.aborted === true ? "Rozprawa anulowana" : error instanceof Error ? error.message : String(error);
+  // Zdarzenie wymaga niepustego powodu — pusty komunikat nie moze wywrocic zapisu przerwania.
+  const reason = message.trim() === "" ? "Nieznany blad" : message;
   return reason.length > MAX_REASON ? `${reason.slice(0, MAX_REASON - 3)}...` : reason;
 }

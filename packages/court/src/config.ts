@@ -1,4 +1,4 @@
-import { AssessmentSchema, boundedText, type CriticId, ScoreSchema } from "@trybunal/domain";
+import { AssessmentSchema, boundedText, CRITIC_IDS, type CriticId, ScoreSchema } from "@trybunal/domain";
 import type { ModelId } from "@trybunal/llm";
 import { z } from "zod";
 
@@ -39,6 +39,16 @@ export const DEFAULT_CONFIG: CourtConfig = {
   maxTokens: { assessment: 2000, prosecution: 1500, statement: 800, justification: 1500 },
   maxAttempts: 3,
 };
+
+/**
+ * Krytyk, ktory pyta pierwszy, zeby pozostali trafili w cache. Cache jest osobny dla kazdego modelu,
+ * wiec liderem musi byc krytyk z modelem, ktorego uzywa najwiecej krytykow (przy remisie — pierwszy
+ * przy stole). ATS na Haiku jako pierwszy nie dalby nic czterem krytykom na Sonnecie.
+ */
+export function cacheLeader(models: Readonly<Record<CriticId, ModelId>>): CriticId {
+  const users = (id: CriticId) => CRITIC_IDS.filter((other) => models[other] === models[id]).length;
+  return CRITIC_IDS.reduce((best, id) => (users(id) > users(best) ? id : best));
+}
 
 /** Co model zwraca w kazdej fazie. Id krytyka dopisuje orkiestracja — model go nie wybiera. */
 export const AssessmentOutput = AssessmentSchema.omit({ criticId: true });

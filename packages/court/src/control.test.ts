@@ -68,6 +68,11 @@ describe("abortReason", () => {
     expect(abortReason(new Error("x"), new AbortController().signal)).toBe("x");
   });
 
+  it("pusty komunikat nie wywraca zapisu przerwania", () => {
+    expect(abortReason(new Error(""))).toBe("Nieznany blad");
+    expect(abortReason(new Error("  "))).toBe("Nieznany blad");
+  });
+
   it("przycina do limitu zdarzenia, a tekst na granicy zostawia", () => {
     expect(abortReason(new Error("x".repeat(MAX_REASON)))).toBe("x".repeat(MAX_REASON));
     expect(abortReason(new Error("x".repeat(MAX_REASON + 1)))).toBe(`${"x".repeat(MAX_REASON - 3)}...`);

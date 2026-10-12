@@ -1,7 +1,7 @@
 import { CRITIC_IDS } from "@trybunal/domain";
 import { isModelId } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
-import { AssessmentOutput, DEFAULT_CONFIG, JustificationOutput, ProsecutionOutput, StatementOutput } from "./config.js";
+import { AssessmentOutput, cacheLeader, DEFAULT_CONFIG, JustificationOutput, ProsecutionOutput, StatementOutput } from "./config.js";
 
 describe("DEFAULT_CONFIG", () => {
   it("ATS na najtanszym modelu, uzasadnienie dla kandydata na najmocniejszym", () => {
@@ -18,6 +18,21 @@ describe("DEFAULT_CONFIG", () => {
   it("limity tokenow sa dodatnie, a prob wiecej niz jedna", () => {
     expect(Object.values(DEFAULT_CONFIG.maxTokens).every((n) => n > 0)).toBe(true);
     expect(DEFAULT_CONFIG.maxAttempts).toBeGreaterThan(1);
+  });
+});
+
+describe("cacheLeader", () => {
+  it("domyslnie HR: pierwszy przy stole z modelem wiekszosci (Sonnet), a nie ATS na Haiku", () => {
+    expect(cacheLeader(DEFAULT_CONFIG.models.assessment)).toBe("hr");
+  });
+
+  it("wszyscy na jednym modelu: pierwszy przy stole", () => {
+    expect(cacheLeader({ ats: "claude-haiku-5-5", hr: "claude-haiku-5-5", techLead: "claude-haiku-5-5", hiringManager: "claude-haiku-5-5", prosecutor: "claude-haiku-5-5" })).toBe("ats");
+  });
+
+  it("remis grup: pierwszy przy stole z najwiekszej grupy", () => {
+    const models = { ats: "claude-opus-5-5", hr: "claude-haiku-5-5", techLead: "claude-sonnet-5-5", hiringManager: "claude-haiku-5-5", prosecutor: "claude-sonnet-5-5" } as const;
+    expect(cacheLeader(models)).toBe("hr");
   });
 });
 

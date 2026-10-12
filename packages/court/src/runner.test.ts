@@ -84,6 +84,26 @@ describe("runTrial — przebieg", () => {
     expect(seen.at(-1)).toEqual(["VerdictAnnounced", "closed"]);
   });
 
+  it("wyjatek obserwatora (np. zerwany strumien) nie przerywa rozprawy i trafia do onObserverError", async () => {
+    const errors: unknown[] = [];
+    const run = await runTrial(input, {
+      llm: new FakeLlmClient(happy),
+      onEvent: () => {
+        throw new Error("klient SSE sie rozlaczyl");
+      },
+      onObserverError: (e) => errors.push(e),
+    });
+    expect(run.state.phase).toBe("closed");
+    expect(errors).toHaveLength(run.events.length);
+  });
+
+  it("bez debaty: po oskarzeniu od razu werdykt", async () => {
+    const llm = new FakeLlmClient(happy);
+    const run = await runTrial({ ...input, debateRounds: 0 }, { llm });
+    expect(run.state.phase).toBe("closed");
+    expect(llm.calls.some((c) => c.label.startsWith("statement:"))).toBe(false);
+  });
+
   it("niepoprawne wejscie to blad wywolujacego, zanim ktokolwiek zapyta model", async () => {
     const llm = new FakeLlmClient(happy);
     await expect(runTrial({ ...input, cvText: " " }, { llm })).rejects.toThrow();
@@ -121,32 +141,26 @@ function manual() {
 }
 
 describe("runTrial — rownoleglosc", () => {
-  it("najpierw sam pierwszy krytyk (cache), potem czterech naraz", async () => {
+  it("najpierw sam lider cache (HR na Sonnecie, nie ATS na Haiku), potem czterech naraz", async () => {
     const { llm, started, settle, flush } = manual();
     const run = runTrial(input, { llm });
     await flush();
-    expect(started).toEqual(["assessment:ats"]);
-    await settle("assessment:ats");
-    expect(started).toEqual(CRITIC_IDS.map((id) => `assessment:${id}`));
-    for (const id of ["prosecutor", "hr", "hiringManager", "techLead"]) await settle(`assessment:${id}`);
+    expect(started).toEqual(["assessment:hr"]);
+    await settle("assessment:hr");
+    expect(started).toEqual(["hr", "ats", "techLead", "hiringManager", "prosecutor"].map((id) => `assessment:${id}`));
+    for (const id of ["prosecutor", "ats", "hiringManager", "techLead"]) await settle(`assessment:${id}`);
     // Dalej nie idziemy: odmowa prokuratora konczy rozprawe, zeby test nie czekal.
     await settle("prosecution", new IncompleteOutputError("refusal", "claude-sonnet-5-5", FAKE_USAGE));
     const submitted = (await run).events.filter((e) => e.type === "AssessmentSubmitted");
     // Zdarzenia w kolejnosci odpowiedzi, nie miejsc przy stole.
-    expect(submitted.map((e) => (e).assessment.criticId)).toEqual([
-      "ats",
-      "prosecutor",
-      "hr",
-      "hiringManager",
-      "techLead",
-    ]);
+    expect(submitted.map((e) => e.assessment.criticId)).toEqual(["hr", "prosecutor", "ats", "hiringManager", "techLead"]);
   });
 
   it("gdy jeden krytyk zawiedzie, pozostali sa anulowani i nikt nie dopisuje sie po przerwaniu", async () => {
     const { llm, settle } = manual();
     const run = runTrial(input, { llm });
-    await settle("assessment:ats");
     await settle("assessment:hr");
+    await settle("assessment:ats");
     // Zawodzi ostatni przy stole, gdy Tech Lead i Hiring Manager jeszcze czekaja — powodem ma byc odmowa, nie ich anulowanie.
     await settle("assessment:prosecutor", new IncompleteOutputError("refusal", "claude-sonnet-5-5", FAKE_USAGE));
     const result = await run;
@@ -187,7 +201,7 @@ describe("runTrial — przerwania", () => {
     const controller = new AbortController();
     const { llm, settle } = manual();
     const run = runTrial(input, { llm, signal: controller.signal });
-    await settle("assessment:ats");
+    await settle("assessment:hr");
     controller.abort();
     expect((await run).state.abortReason).toBe("Rozprawa anulowana");
   });
