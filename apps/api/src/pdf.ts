@@ -19,10 +19,15 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
   try {
     // Kopia: pdf.js przejmuje bufor, a wywolujacy moze go jeszcze potrzebowac.
     const pdf = await getDocumentProxy(new Uint8Array(bytes));
-    if (pdf.numPages > MAX_PDF_PAGES) {
-      throw new UnreadablePdfError(`CV ma ${String(pdf.numPages)} stron, limit to ${String(MAX_PDF_PAGES)}`);
+    // Zwolnienie pamieci pdf.js zawsze, takze po odrzuceniu — serwer dziala dlugo.
+    try {
+      if (pdf.numPages > MAX_PDF_PAGES) {
+        throw new UnreadablePdfError(`CV ma ${String(pdf.numPages)} stron, limit to ${String(MAX_PDF_PAGES)}`);
+      }
+      pages = (await extractText(pdf, { mergePages: false })).text;
+    } finally {
+      await pdf.loadingTask.destroy();
     }
-    pages = (await extractText(pdf, { mergePages: false })).text;
   } catch (error) {
     if (error instanceof UnreadablePdfError) {
       throw error;

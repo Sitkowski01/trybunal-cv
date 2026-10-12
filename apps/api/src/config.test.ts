@@ -11,6 +11,7 @@ describe("readConfig", () => {
       DAILY_BUDGET_USD: 5,
       MAX_RUNNING_TRIALS: 3,
       RATE_LIMIT_PER_HOUR: 5,
+      TRUST_PROXY: false,
     });
   });
 

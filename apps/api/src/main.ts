@@ -24,13 +24,19 @@ if (config.DATABASE_URL === undefined) {
   journal = new Journal(new InMemoryEventStore(), newKey());
 } else {
   pool = new pg.Pool({ connectionString: config.DATABASE_URL });
+  // Bez sluchacza blad bezczynnego polaczenia (restart bazy) zabilby proces jako nieobsluzony.
+  pool.on("error", (error) => {
+    console.error("Blad polaczenia z baza:", error.message);
+  });
   await migrate(pool);
   journal = new Journal(new PostgresEventStore(pool), parseMasterKey(config.TRYBUNAL_MASTER_KEY ?? ""));
 }
 
 const apiKey = config.ANTHROPIC_API_KEY;
 const llm = config.TRYBUNAL_REHEARSAL || apiKey === undefined ? rehearsalLlm : () => AnthropicLlmClient.fromApiKey(apiKey);
-const hub = new TrialHub();
+const hub = new TrialHub((error) => {
+  console.error("Blad sluchacza strumienia:", error);
+});
 const service = new TrialService({
   journal,
   hub,
@@ -42,13 +48,27 @@ const service = new TrialService({
     app.log.error({ err: error, trialId }, "Blad w tle rozprawy");
   },
 });
-const app = await buildApp({ service, journal, hub, rateLimit: { max: config.RATE_LIMIT_PER_HOUR, timeWindowMs: 3_600_000 }, logger: true });
+const app = await buildApp({
+  service,
+  journal,
+  hub,
+  rateLimit: { max: config.RATE_LIMIT_PER_HOUR, timeWindowMs: 3_600_000 },
+  logger: true,
+  trustProxy: config.TRUST_PROXY,
+});
 
 // Zamkniecie: najpierw rozprawy zapisuja przerwanie, potem serwer i baza.
+// Nowe wniesienia dostaja 503 od pierwszej chwili zamykania; po 10 s konczymy mimo wszystko.
 const shutdown = async () => {
-  await service.close();
-  await app.close();
-  await pool?.end();
+  setTimeout(() => process.exit(1), 10_000).unref();
+  try {
+    await service.close();
+    await app.close();
+    await pool?.end();
+  } catch (error) {
+    console.error("Blad przy zamykaniu:", error);
+    process.exitCode = 1;
+  }
 };
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {

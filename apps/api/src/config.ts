@@ -22,6 +22,8 @@ const EnvSchema = z
     DAILY_BUDGET_USD: usd.default(5),
     MAX_RUNNING_TRIALS: z.coerce.number().int().positive().default(3),
     RATE_LIMIT_PER_HOUR: z.coerce.number().int().positive().default(5),
+    /** 1 za proxy (Docker, nginx): limit liczony per X-Forwarded-For, a nie per adres proxy. */
+    TRUST_PROXY: flag.default(false),
   })
   .superRefine((env, ctx) => {
     if (env.DATABASE_URL !== undefined && env.TRYBUNAL_MASTER_KEY === undefined) {
