@@ -7,14 +7,19 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
-    "mutation": "stryker run"
+    "mutation": "stryker run",
+    "start": "node dist/main.js"
   },
   "dependencies": {
+    "@fastify/multipart": "10.1.2",
+    "@fastify/rate-limit": "11.2.0",
     "@trybunal/court": "workspace:*",
     "@trybunal/domain": "workspace:*",
     "@trybunal/llm": "workspace:*",
+    "fastify": "5.12.5",
     "pg": "8.23.0",
-    "unpdf": "1.8.1"
+    "unpdf": "1.8.1",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",
