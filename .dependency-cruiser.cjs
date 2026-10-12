@@ -21,6 +21,13 @@ module.exports = {
       to: { path: "^(packages/(?!domain)|apps/)" },
     },
     {
+      name: "llm-bez-domeny",
+      comment: "packages/llm to ogolny klient modelu (koszty, budzet, nagrania) — nie zna rozprawy",
+      severity: "error",
+      from: { path: "^packages/llm/src" },
+      to: { path: "^(packages/(?!llm)|apps/)" },
+    },
+    {
       name: "web-bez-llm",
       comment: "frontend zna tylko domene (typy zdarzen), nigdy warstwy LLM ani API",
       severity: "error",

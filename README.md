@@ -12,6 +12,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 | Pakiet | Rola |
 |---|---|
 | `packages/domain` | czysta logika rozprawy: skład trybunału, oceny, werdykt — bez IO |
+| `packages/llm` | klient modelu: adapter Claude, koszt i budżet, atrapa do testów, nagrania rozmów |
 
 ## Jak działa rozprawa
 
@@ -32,6 +33,24 @@ TrialFiled ─► 5 × AssessmentSubmitted ─► ProsecutionDelivered ─► 0�
   a cytat, którego nie ma w CV, jest odrzucany. Porównanie znosi różnice zapisu z PDF:
   litery rozłożone na znak i ogonek, miękkie łączniki, typograficzne cudzysłowy.
 - **Poprawki jako diff** słowo po słowie (najdłuższy wspólny podciąg).
+
+## Rozmowa z modelem
+
+- **Port `LlmClient`.** Logika rozprawy nie wie, czy rozmawia z Claude'em, atrapą w testach,
+  czy nagraniem w demo.
+- **Ustrukturyzowane odpowiedzi + pełna walidacja.** Odpowiedź ma format JSON Schema z zod,
+  ale API gwarantuje tylko kształt JSON-a — zakresy, długości i `enum` trafiają do modelu jako
+  opis. Dlatego każda odpowiedź przechodzi przez pełny schemat; błąd niesie koszt zużytych tokenów.
+- **Cache wspólnego kontekstu.** Zasady, CV i oferta idą na początku promptu z punktem cache;
+  rola krytyka dopiero za nim. Pięciu krytyków ma ten sam początek, więc od drugiego płaci się
+  za niego 5% ceny (Sonnet 5.5).
+- **Koszt w nanodolarach** (liczby całkowite, bez floatów w pieniądzach) i **twardy budżet**:
+  przed zapytaniem rezerwowany jest najgorszy możliwy koszt (tokenów nie więcej niż bajtów
+  UTF-8 promptu), więc równoległe zapytania nie przebiją limitu.
+- **Nagrania.** Prawdziwa rozprawa nagrana raz służy jako demo bez serwera i test e2e.
+
+Test na prawdziwym API uruchamia się tylko z kluczem:
+`ANTHROPIC_API_KEY=... pnpm --filter @trybunal/llm test`.
 
 ## Uruchomienie
 
