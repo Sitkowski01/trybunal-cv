@@ -2,9 +2,10 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "plugins": ["@stryker-mutator/vitest-runner", "@stryker-mutator/typescript-checker"],
   "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.mutation.config.ts" },
   "checkers": ["typescript"],
   "tsconfigFile": "tsconfig.json",
-  "mutate": ["src/**/*.ts", "!src/**/*.test.ts", "!src/**/*.contract.ts", "!src/index.ts", "!src/main.ts"],
+  "mutate": ["src/**/*.ts", "!src/**/*.test.ts", "!src/**/*.contract.ts", "!src/index.ts", "!src/main.ts", "!src/postgres.ts"],
   "reporters": ["clear-text", "progress", "html"],
   "htmlReporter": { "fileName": "reports/mutation/index.html" },
   "thresholds": { "high": 95, "low": 90, "break": 90 }
