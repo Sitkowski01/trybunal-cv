@@ -51,6 +51,17 @@ describe("Postgres — migracje i wspolbieznosc", () => {
     const broken = new pg.Pool({ connectionString: container.getConnectionUri().replace(/\/[^/]+$/, "/brak_bazy") });
     const store = new PostgresEventStore(broken);
     await expect(store.createTrial("t", Buffer.from("k"), new Date())).rejects.not.toBeInstanceOf(ConflictError);
+    const record = { trialId: "t", seq: 1, type: "TrialFiled", occurredAt: new Date(), schemaVersion: 1, payload: Buffer.from([1]), calls: [] };
+    await expect(store.append(record)).rejects.not.toBeInstanceOf(ConflictError);
     await broken.end();
+  });
+
+  it("nieudana migracja jest wycofana w calosci i nie jest zapisana jako wykonana", async () => {
+    const failing = [...MIGRATIONS, "CREATE TABLE polowiczna (id int); SELECT * FROM nie_ma_takiej_tabeli;"];
+    await expect(migrate(pool, failing)).rejects.toThrow(/nie_ma_takiej_tabeli/);
+    const { rows } = await pool.query("SELECT to_regclass('polowiczna') AS t, (SELECT max(version) FROM schema_migrations) AS v");
+    expect(rows[0]).toEqual({ t: null, v: MIGRATIONS.length });
+    // Blokada zwolniona mimo bledu: kolejna migracja nie wisi.
+    await migrate(pool);
   });
 });

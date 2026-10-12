@@ -27,14 +27,14 @@ export const MIGRATIONS: readonly string[] = [
 
 const MIGRATION_LOCK = 7_211_001;
 
-export async function migrate(pool: pg.Pool): Promise<void> {
+export async function migrate(pool: pg.Pool, migrations: readonly string[] = MIGRATIONS): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK]);
     await client.query("CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL)");
     const { rows } = await client.query<{ version: number }>("SELECT version FROM schema_migrations");
     const applied = new Set(rows.map((r) => r.version));
-    for (const [index, sql] of MIGRATIONS.entries()) {
+    for (const [index, sql] of migrations.entries()) {
       const version = index + 1;
       if (applied.has(version)) continue;
       await client.query("BEGIN");
