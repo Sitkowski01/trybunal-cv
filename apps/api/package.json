@@ -1,0 +1,27 @@
+{
+  "name": "@trybunal/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "mutation": "stryker run"
+  },
+  "dependencies": {
+    "@trybunal/court": "workspace:*",
+    "@trybunal/domain": "workspace:*",
+    "@trybunal/llm": "workspace:*",
+    "unpdf": "1.8.1"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/typescript-checker": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "fast-check": "4.10.2",
+    "pdf-lib": "1.17.1",
+    "vitest": "4.1.11"
+  }
+}
