@@ -147,9 +147,8 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
     });
     emit(announceVerdict(state, justification));
   } catch (error) {
-    if (state.phase !== "closed" && state.phase !== "aborted") {
-      emit({ type: "TrialAborted", reason: abortReason(error, options.signal) });
-    }
+    // Rozprawa jest tu zawsze w toku: obserwator nie rzuca, a werdykt to ostatni krok w try.
+    emit({ type: "TrialAborted", reason: abortReason(error, options.signal) });
   }
   return { state, events, calls };
 }

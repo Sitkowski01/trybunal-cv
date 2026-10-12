@@ -72,6 +72,7 @@ describe("ask", () => {
     const { result, calls } = run(llm);
     expect(await result).toEqual({ score: 5 });
     expect(requests[1]?.retry).toEqual({ previousOutput: '{"score":"x"}', problems: ["score: zle"] });
+    expect(calls[0]).toMatchObject({ usage: FAKE_USAGE, costKnown: true });
     expect(calls.map((c) => [c.attempt, c.outcome, c.costNanoUsd])).toEqual([
       [1, "invalid", invalid("").costNanoUsd],
       [2, "ok", 7],
