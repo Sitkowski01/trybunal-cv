@@ -50,19 +50,23 @@ const SINGLE_QUOTES = /[\u2018\u2019\u201A\u201B]/g;
 const DOUBLE_QUOTES = /[\u201C\u201D\u201E\u201F]/g;
 const DASHES = /[\u2010-\u2015\u2212]/g;
 const FINAL_SIGMA = /\u03c2/g;
+/** Ogonek, kropka, kreska itp. jako osobny znak z odstepem \u2014 tak niektore ekstraktory PDF zapisuja "\u0105". */
+const SPACING_MARKS = /[\u00a8\u00b4\u00b8\u02c7\u02d8-\u02dd]/g;
 
 /**
  * Tekst z PDF i tekst od modelu roznia sie zapisem, nie trescia: litery zlozone albo rozlozone
- * na znak i ogonek, miekkie laczniki, typograficzne cudzyslowy i myslniki. Sprowadzamy oba do
- * jednej postaci. Dwa przypadki znalazl test wlasnosci na pelnym Unicode:
+ * na litere i ogonek, ogonek jako osobny znak, miekkie laczniki, typograficzne cudzyslowy
+ * i myslniki. Sprowadzamy oba do jednej postaci. Dwa przypadki znalazl test wlasnosci na pelnym Unicode:
  * - rozkladamy (NFKD) i usuwamy znaki diakrytyczne zamiast skladac (NFKC): skladanie potrafi
- *   polaczyc sasiednie znaki w jeden (koreanskie "\u3141" + "\u314f" -> "\ub9c8"), wtedy fragment tekstu
- *   przestaje byc fragmentem. Przy okazji "Zarzadzalem" od modelu pasuje do "Zarz\u0105dza\u0142em";
- * - toLowerCase zalezy od kontekstu: wielka sigma na koncu slowa to "\u03c2", a sama \u2014 "\u03c3".
- *   Jak w case folding z Unicode traktujemy obie jako "\u03c3".
+ *   polaczyc sasiednie znaki w jeden (dwie koreanskie litery w jedna sylabe), wtedy fragment
+ *   tekstu przestaje byc fragmentem. Skutek: "a" z ogonkiem i "a" sa tym samym, ale "l" z kreska
+ *   nie rozklada sie na "l" \u2014 "Zarzadzalem" nie pasuje do wersji z polskimi znakami;
+ * - toLowerCase zalezy od kontekstu: wielka sigma na koncu slowa daje sigme koncowa, a sama \u2014
+ *   zwykla. Jak w case folding z Unicode traktujemy obie jako zwykla.
  */
 const normalize = (s: string) =>
   s
+    .replace(SPACING_MARKS, "")
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .replace(INVISIBLE, "")

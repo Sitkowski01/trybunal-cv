@@ -136,6 +136,12 @@ describe("findInventedQuotes", () => {
     expect(findInventedQuotes(quoting("Zarzadzałem zespołem"), "Zarządzałem zespołem")).toEqual([]);
   });
 
+  it("ogonek i kropka jako osobne znaki z odstępem (niektóre PDF) nie psują cytatu", () => {
+    // Ekstraktor PDF z LaTeX-a: "a" + ogonek z odstepem, kropka z odstepem + "z".
+    const pdf = `Zarza${char(0x02db)}dzałem, ${char(0x02d9)}zaden problem`;
+    expect(findInventedQuotes(quoting("Zarządzałem, żaden problem"), pdf)).toEqual([]);
+  });
+
   it("typograficzne cudzyslowy i myslniki to te same znaki co proste", () => {
     const cv = `Projekt ${char(0x201e)}Parkiet${char(0x201d)} ${char(0x2013)} gielda`;
     expect(findInventedQuotes(quoting('Projekt "Parkiet" - gielda'), cv)).toEqual([]);
