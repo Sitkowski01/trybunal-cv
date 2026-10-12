@@ -1,6 +1,6 @@
 import type { Assessment } from "./assessment.js";
-import type { CriticId } from "./critics.js";
-import type { Verdict } from "./verdict.js";
+import { CRITIC_IDS, type CriticId } from "./critics.js";
+import type { Scores, Verdict } from "./verdict.js";
 
 /**
  * Rozprawa jako ciag zdarzen. Stan nie jest nigdzie zapisywany — to wynik zlozenia zdarzen
@@ -52,4 +52,85 @@ export interface TrialState {
   readonly verdict: Verdict | null;
   readonly justification: string | null;
   readonly abortReason: string | null;
+}
+
+export class TrialRuleError extends Error {
+  override readonly name = "TrialRuleError";
+}
+
+const fail = (message: string): never => {
+  throw new TrialRuleError(message);
+};
+
+export function fileTrial(event: TrialEvent): TrialState {
+  if (event.type !== "TrialFiled") {
+    return fail(`Rozprawa musi zaczac sie od TrialFiled, a nie ${event.type}`);
+  }
+  const { trialId, cvText, jobOffer, debateRounds } = event;
+  if (!Number.isInteger(debateRounds) || debateRounds < 0 || debateRounds > MAX_DEBATE_ROUNDS) {
+    return fail(`Liczba rund debaty musi byc od 0 do ${String(MAX_DEBATE_ROUNDS)}`);
+  }
+  return {
+    trialId,
+    cvText,
+    jobOffer,
+    debateRounds,
+    phase: "assessing",
+    assessments: [],
+    prosecution: null,
+    round: 0,
+    statements: [],
+    verdict: null,
+    justification: null,
+    abortReason: null,
+  };
+}
+
+export function evolve(state: TrialState, event: TrialEvent): TrialState {
+  switch (event.type) {
+    case "TrialFiled":
+      return fail("Rozprawa juz zostala wniesiona");
+    case "AssessmentSubmitted":
+      return submitAssessment(state, event.assessment);
+    case "TrialAborted":
+    case "ProsecutionDelivered":
+    case "StatementMade":
+    case "VerdictAnnounced":
+      return fail(`${event.type}: jeszcze nieobslugiwane`);
+  }
+}
+
+export function replay(events: readonly TrialEvent[]): TrialState {
+  const [first, ...rest] = events;
+  if (first === undefined) {
+    return fail("Brak zdarzen rozprawy");
+  }
+  return rest.reduce(evolve, fileTrial(first));
+}
+
+function requirePhase(state: TrialState, phase: Phase, action: string): void {
+  if (state.phase !== phase) {
+    fail(`${action} mozliwe w fazie ${phase}, a rozprawa jest w fazie ${state.phase}`);
+  }
+}
+
+function submitAssessment(state: TrialState, assessment: Assessment): TrialState {
+  requirePhase(state, "assessing", "Ocena");
+  const id = assessment.criticId;
+  if (state.assessments.some((a) => a.criticId === id)) {
+    return fail(`Krytyk ${id} juz zlozyl ocene`);
+  }
+  const assessments = [...state.assessments, assessment];
+  // Id sa unikalne i z zamknietej listy, wiec komplet = tyle ocen, ilu krytykow.
+  const allIn = assessments.length === CRITIC_IDS.length;
+  return { ...state, assessments, phase: allIn ? "prosecution" : "assessing" };
+}
+
+// Rzutowanie jest bezpieczne od fazy prosecution: wtedy kazdy krytyk ma dokladnie jedna ocene.
+// Wczesniej wynik jest niepelny — dlatego funkcje wolamy tylko po zebraniu ocen.
+type PartialScores = Partial<Record<CriticId, number>>;
+
+/** Oceny z niezaleznej rundy, zanim ktokolwiek uslyszal innych. */
+export function initialScores(state: TrialState): Scores {
+  return Object.fromEntries(state.assessments.map((a) => [a.criticId, a.score])) as PartialScores as Scores;
 }
