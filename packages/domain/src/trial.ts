@@ -1,6 +1,6 @@
 import { type Assessment, findInventedQuotes, ScoreSchema } from "./assessment.js";
 import { CRITIC_IDS, type CriticId } from "./critics.js";
-import { deliberate, type Scores, type Verdict } from "./verdict.js";
+import { deliberate, RULE_VERSION, type Scores, type Verdict } from "./verdict.js";
 
 /**
  * Rozprawa jako ciag zdarzen. Stan nie jest nigdzie zapisywany — to wynik zlozenia zdarzen
@@ -26,7 +26,12 @@ export type TrialEvent =
       readonly statement: string;
       readonly revisedScore: number | null;
     }
-  | { readonly type: "VerdictAnnounced"; readonly justification: string }
+  | {
+      readonly type: "VerdictAnnounced";
+      readonly ruleVersion: number;
+      readonly verdict: Verdict;
+      readonly justification: string;
+    }
   | { readonly type: "TrialAborted"; readonly reason: string };
 
 export type Phase = "assessing" | "prosecution" | "debate" | "deliberation" | "closed" | "aborted";
@@ -102,7 +107,7 @@ export function evolve(state: TrialState, event: TrialEvent): TrialState {
     case "StatementMade":
       return makeStatement(state, event);
     case "VerdictAnnounced":
-      return announceVerdict(state, event.justification);
+      return closeWithVerdict(state, event.verdict, event.justification);
     default:
       // Typ wyklucza ten przypadek, ale zdarzenia przyjda tez z bazy, gdzie typ niczego nie gwarantuje.
       return fail(`Nieznane zdarzenie: ${String((event as { type: unknown }).type)}`);
@@ -175,9 +180,21 @@ function makeStatement(state: TrialState, event: Extract<TrialEvent, { type: "St
   };
 }
 
-function announceVerdict(state: TrialState, justification: string): TrialState {
+/** Werdykt, ktory wynika z ocen — orkiestracja daje go modelowi sedziego do uzasadnienia. */
+export function pendingVerdict(state: TrialState): Verdict {
   requirePhase(state, "deliberation", "Werdykt");
-  const verdict = deliberate(initialScores(state), currentScores(state));
+  return deliberate(initialScores(state), currentScores(state));
+}
+
+/** Jedyna droga do zdarzenia werdyktu: decyzja z reguly, uzasadnienie od sedziego. */
+export function announceVerdict(state: TrialState, justification: string): TrialEvent {
+  return { type: "VerdictAnnounced", ruleVersion: RULE_VERSION, verdict: pendingVerdict(state), justification };
+}
+
+// Zdarzenie to fakt: przy odtwarzaniu bierzemy zapisany werdykt, a nie liczymy go od nowa
+// biezaca regula, ktora mogla sie od tego czasu zmienic.
+function closeWithVerdict(state: TrialState, verdict: Verdict, justification: string): TrialState {
+  requirePhase(state, "deliberation", "Werdykt");
   return { ...state, verdict, justification, phase: "closed" };
 }
 

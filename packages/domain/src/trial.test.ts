@@ -3,16 +3,18 @@ import { describe, expect, it } from "vitest";
 import type { Assessment } from "./assessment.js";
 import { CRITIC_IDS, type CriticId } from "./critics.js";
 import {
+  announceVerdict,
   currentScores,
   evolve,
   fileTrial,
   initialScores,
   nextSpeaker,
+  pendingVerdict,
   replay,
   type TrialEvent,
   TrialRuleError,
 } from "./trial.js";
-import { deliberate } from "./verdict.js";
+import { deliberate, RULE_VERSION, type Scores, type Verdict } from "./verdict.js";
 
 const filed = (debateRounds = 1): TrialEvent => ({
   type: "TrialFiled",
@@ -48,7 +50,8 @@ const statement = (round: number, criticId: CriticId, revisedScore: number | nul
 });
 
 const round = (n: number): TrialEvent[] => CRITIC_IDS.map((id) => statement(n, id));
-const verdict: TrialEvent = { type: "VerdictAnnounced", justification: "Uzasadnienie" };
+/** Zdarzenie werdyktu tak, jak zbuduje je orkiestracja po naradzie. */
+const withVerdict = (events: TrialEvent[]): TrialEvent[] => [...events, announceVerdict(replay(events), "Uzasadnienie")];
 const aborted: TrialEvent = { type: "TrialAborted", reason: "przekroczony budzet" };
 
 const rejects = (events: TrialEvent[], message: RegExp) => {
@@ -207,16 +210,48 @@ describe("oskarzenie i debata", () => {
 });
 
 describe("werdykt i zakonczenie", () => {
-  const fullTrial = [filed(1), ...allAssessed, prosecution, ...round(1), verdict];
+  const fullTrial = withVerdict([filed(1), ...allAssessed, prosecution, ...round(1)]);
 
-  it("narada zamyka rozprawe werdyktem z reguly", () => {
+  it("narada zamyka rozprawe werdyktem z reguly i aktualna wersja reguly", () => {
     const state = replay(fullTrial);
     expect(state).toMatchObject({ phase: "closed", justification: "Uzasadnienie" });
-    expect(state.verdict).toEqual(deliberate(initialScores(state), currentScores(state)));
+    expect(state.verdict).toMatchObject({ decision: "invite", juryAverage: 6, mindChanges: [] });
+    expect(fullTrial.at(-1)).toMatchObject({ type: "VerdictAnnounced", ruleVersion: RULE_VERSION });
+  });
+
+  it("debata moze odwrocic decyzje: dwoch przysieglych zmienia zdanie na 4", () => {
+    const events = withVerdict([
+      filed(1),
+      ...allAssessed,
+      prosecution,
+      statement(1, "ats"),
+      statement(1, "hr", 4),
+      statement(1, "techLead", 4),
+      statement(1, "hiringManager"),
+      statement(1, "prosecutor"),
+    ]);
+    expect(replay(events).verdict).toMatchObject({
+      decision: "reject",
+      juryAverage: 5,
+      mindChanges: [
+        { criticId: "hr", from: 6, to: 4 },
+        { criticId: "techLead", from: 6, to: 4 },
+      ],
+    });
+  });
+
+  it("przy odtwarzaniu liczy sie zapisany werdykt, nie biezaca regula", () => {
+    const beforeVerdict = [filed(0), ...allAssessed, prosecution];
+    const recorded: Verdict = { ...pendingVerdict(replay(beforeVerdict)), decision: "reject" };
+    const old: TrialEvent = { type: "VerdictAnnounced", ruleVersion: 0, verdict: recorded, justification: "Stara regula" };
+    expect(replay([...beforeVerdict, old]).verdict).toEqual(recorded);
   });
 
   it("werdykt dopiero po debacie", () => {
-    rejects([filed(), ...allAssessed, prosecution, verdict], /Werdykt mozliwe w fazie deliberation/);
+    const state = replay([filed(), ...allAssessed, prosecution]);
+    expect(() => pendingVerdict(state)).toThrow(/Werdykt mozliwe w fazie deliberation/);
+    const early = fullTrial.at(-1) as TrialEvent;
+    rejects([filed(), ...allAssessed, prosecution, early], /Werdykt mozliwe w fazie deliberation/);
   });
 
   it("po werdykcie rozprawa nie przyjmuje zdarzen", () => {
@@ -257,31 +292,38 @@ describe("wlasnosci rozprawy", () => {
       order: fc.shuffledSubarray([...CRITIC_IDS], { minLength: 5, maxLength: 5 }),
       revisions: fc.array(fc.option(scoreArb), { minLength: 15, maxLength: 15 }),
     })
-    .map(({ rounds, scores, order, revisions }) => [
-      filed(rounds),
-      ...order.map((id) => submitted(id, scores[CRITIC_IDS.indexOf(id)])),
-      prosecution,
-      ...Array.from({ length: rounds }, (_, r) =>
-        CRITIC_IDS.map((id, i) => statement(r + 1, id, revisions[r * 5 + i] ?? null)),
-      ).flat(),
-      verdict,
-    ]);
+    .map(({ rounds, scores, order, revisions }) => {
+      const initial = Object.fromEntries(CRITIC_IDS.map((id, i) => [id, scores[i] ?? 1]));
+      // Oceny koncowe liczone niezaleznie od currentScores: ostatnia zmiana w kolumnie krytyka.
+      const final = { ...initial };
+      revisions.slice(0, rounds * 5).forEach((r, k) => {
+        const id = CRITIC_IDS[k % CRITIC_IDS.length];
+        if (r !== null && id !== undefined) final[id] = r;
+      });
+      const events = withVerdict([
+        filed(rounds),
+        ...order.map((id) => submitted(id, initial[id])),
+        prosecution,
+        ...Array.from({ length: rounds }, (_, r) =>
+          CRITIC_IDS.map((id, i) => statement(r + 1, id, revisions[r * 5 + i] ?? null)),
+        ).flat(),
+      ]);
+      return { events, expected: deliberate(initial as Scores, final as Scores) };
+    });
 
-  it("kazda poprawna rozprawa konczy sie werdyktem z reguly", () => {
+  it("kazda poprawna rozprawa konczy sie werdyktem z niezaleznie policzonych ocen", () => {
     fc.assert(
-      fc.property(trialArb, (events) => {
+      fc.property(trialArb, ({ events, expected }) => {
         const state = replay(events);
-        return (
-          state.phase === "closed" &&
-          JSON.stringify(state.verdict) === JSON.stringify(deliberate(initialScores(state), currentScores(state)))
-        );
+        expect(state.phase).toBe("closed");
+        expect(state.verdict).toEqual(expected);
       }),
     );
   });
 
   it("usuniecie dowolnego zdarzenia psuje rozprawe albo jej nie konczy", () => {
     fc.assert(
-      fc.property(trialArb, fc.nat(), (events, n) => {
+      fc.property(trialArb, fc.nat(), ({ events }, n) => {
         const index = 1 + (n % (events.length - 1));
         const broken = events.filter((_, i) => i !== index);
         try {

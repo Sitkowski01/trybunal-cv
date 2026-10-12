@@ -5,6 +5,12 @@ import { CRITIC_IDS, type CriticId, jurors } from "./critics.js";
  * sam werdykt, wiec da sie go przetestowac i odtworzyc z dziennika. Model sedziego dostaje
  * gotowy werdykt i pisze tylko uzasadnienie.
  */
+
+/**
+ * Wersja reguly zapisywana w zdarzeniu werdyktu. Zmiana progow = nowa wersja; stare rozprawy
+ * zachowuja werdykt, ktory naprawde ogloszono, razem z uzasadnieniem pisanym pod niego.
+ */
+export const RULE_VERSION = 1;
 export const INVITE_THRESHOLD = 6;
 /** Ponizej tej oceny ATS odrzuca CV, zanim zobaczy je czlowiek — srednia nic tu nie pomoze. */
 export const ATS_GATE = 4;
