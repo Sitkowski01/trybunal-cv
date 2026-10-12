@@ -13,6 +13,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 |---|---|
 | `packages/domain` | czysta logika rozprawy: skład trybunału, oceny, werdykt — bez IO |
 | `packages/llm` | klient modelu: adapter Claude, koszt i budżet, atrapa do testów, nagrania rozmów |
+| `packages/court` | orkiestracja rozprawy: prompty, oceny, debata, werdykt, ponowienia, CLI |
 
 ## Jak działa rozprawa
 
@@ -59,14 +60,36 @@ TrialFiled ─► 5 × AssessmentSubmitted ─► ProsecutionDelivered ─► 0�
 Test na prawdziwym API uruchamia się tylko z kluczem:
 `ANTHROPIC_API_KEY=... pnpm --filter @trybunal/llm test`.
 
+## Rozprawa z AI
+
+`packages/court` prowadzi rozprawę: jako jedyny pakiet zna i domenę, i klienta modelu.
+
+- **Modele do zadań.** Bot ATS sprawdza słowa kluczowe — wystarczy Haiku; krytycy i debata —
+  Sonnet; uzasadnienie, które przeczyta kandydat — Opus.
+- **Najpierw jeden krytyk, potem czterech naraz** — żeby pozostali trafili w cache. Gdy jeden
+  zawiedzie, reszta jest anulowana, a powodem przerwania jest pierwszy błąd w czasie.
+- **Ponowienia z informacją zwrotną.** Zła odpowiedź (schemat albo cytat, którego nie ma w CV)
+  wraca do modelu jako jego wypowiedź z listą błędów; limit tokenów — ponowienie z większym;
+  przeciążenie API — odczekanie (`retry-after` albo 1 s, 2 s, 4 s); odmowa modelu — koniec.
+- **Każde zdarzenie przez schemat i reguły domeny**, zanim trafi do dziennika. Błąd, którego
+  nie naprawi ponowienie (budżet, odmowa, anulowanie), kończy rozprawę zdarzeniem `TrialAborted`.
+- **Snapshoty pełnych promptów** — każda zmiana promptu jest widoczna w review jak zmiana kodu.
+
 ## Uruchomienie
 
 Wymagania: Node 24, pnpm 11.
 
 ```bash
 pnpm install
-pnpm check      # typy, lint, reguły architektury, testy z pokryciem
+pnpm check      # build, typy, lint, reguły architektury, testy z pokryciem
 pnpm mutation   # mutation testing (Stryker)
+
+# Prawdziwa rozprawa (klucz w zmiennej ANTHROPIC_API_KEY albo w pliku .env):
+pnpm build
+pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend.md
+# Wynik w out/: events.json (dziennik), calls.json (koszty), cassette.json (nagranie).
+# Odtworzenie nagrania bez klucza i bez kosztów:
+pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend.md --replay out/cassette.json
 ```
 
 ## Jakość
