@@ -1,6 +1,6 @@
 import type { Assessment } from "./assessment.js";
 import { CRITIC_IDS, type CriticId } from "./critics.js";
-import type { Scores, Verdict } from "./verdict.js";
+import { deliberate, type Scores, type Verdict } from "./verdict.js";
 
 /**
  * Rozprawa jako ciag zdarzen. Stan nie jest nigdzie zapisywany — to wynik zlozenia zdarzen
@@ -102,7 +102,7 @@ export function evolve(state: TrialState, event: TrialEvent): TrialState {
     case "StatementMade":
       return makeStatement(state, event);
     case "VerdictAnnounced":
-      return fail("Werdykt: jeszcze nieobslugiwany");
+      return announceVerdict(state, event.justification);
   }
 }
 
@@ -163,6 +163,12 @@ function makeStatement(state: TrialState, event: Extract<TrialEvent, { type: "St
     round: roundOver && !debateOver ? state.round + 1 : state.round,
     phase: debateOver ? "deliberation" : "debate",
   };
+}
+
+function announceVerdict(state: TrialState, justification: string): TrialState {
+  requirePhase(state, "deliberation", "Werdykt");
+  const verdict = deliberate(initialScores(state), currentScores(state));
+  return { ...state, verdict, justification, phase: "closed" };
 }
 
 // Rzutowanie jest bezpieczne od fazy prosecution: wtedy kazdy krytyk ma dokladnie jedna ocene.
