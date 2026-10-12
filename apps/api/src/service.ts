@@ -83,13 +83,16 @@ export class TrialService {
       throw new InvalidTrialError(parsed.error.issues.map((i) => `${i.path.map(String).join(".")}: ${i.message}`));
     }
     this.reserveSlot();
+    let filed: Promise<void>;
     try {
       await this.checkDailyBudget();
       await this.options.journal.create(trialId);
-      this.start(input);
+      filed = this.start(input);
     } finally {
       this.filing--;
     }
+    // Odpowiedz dopiero, gdy wniesienie jest w dzienniku: GET zaraz po 202 widzi juz rozprawe.
+    await filed;
     return { trialId, anonymized: cv.found };
   }
 
@@ -144,12 +147,13 @@ export class TrialService {
     }
   }
 
-  private start(input: { trialId: string; cvText: string; jobOffer: string; debateRounds: number }): void {
+  /** Uruchamia rozprawe w tle; zwraca obietnice zapisu wniesienia (TrialFiled). */
+  private start(input: { trialId: string; cvText: string; jobOffer: string; debateRounds: number }): Promise<void> {
     const { journal, hub, onError } = this.options;
     const controller = new AbortController();
     let seq = 0;
     let writes = Promise.resolve();
-    let failed = false;
+    let failure: { readonly error: unknown } | undefined;
     const done = runTrial(input, {
       llm: new BudgetedLlmClient(this.options.llm(), this.options.trialBudgetNanoUsd),
       signal: controller.signal,
@@ -159,21 +163,25 @@ export class TrialService {
       onEvent: (event, _state, calls) => {
         const next = ++seq;
         writes = writes.then(async () => {
-          if (failed) return;
+          if (failure !== undefined) return;
           try {
             hub.publish(await journal.append(input.trialId, next, event, calls));
           } catch (error) {
-            failed = true;
+            failure = { error };
             controller.abort();
             onError?.(error, input.trialId);
           }
         });
       },
-      onObserverError: (error) => onError?.(error, input.trialId),
     })
       .then(() => writes)
-      .catch((error: unknown) => onError?.(error, input.trialId))
+      // Stryker disable next-line all: runTrial nie odrzuca przy poprawnym wejsciu (sprawdzone w file) — to tylko ochrona procesu.
+      .catch(/* v8 ignore next */ (error: unknown) => onError?.(error, input.trialId))
       .finally(() => this.running.delete(input.trialId));
     this.running.set(input.trialId, { controller, done });
+    // runTrial zglasza wniesienie synchronicznie, przed pierwszym await — jego zapis jest juz w kolejce.
+    return writes.then(() => {
+      if (failure !== undefined) throw failure.error;
+    });
   }
 }

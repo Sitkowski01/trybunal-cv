@@ -1,9 +1,10 @@
-import type { LlmClient } from "@trybunal/llm";
+import { DEFAULT_CONFIG } from "@trybunal/court";
+import { FakeLlmClient, type LlmClient } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
 import { type EventEnvelope, Journal } from "./journal.js";
-import { rehearsalLlm } from "./rehearsal.js";
+import { rehearsalLlm, rehearsalScript } from "./rehearsal.js";
 import { CourtBusyError, InvalidTrialError, type ServiceOptions, TrialService } from "./service.js";
 import { InMemoryEventStore } from "./store.js";
 
@@ -71,6 +72,31 @@ describe("TrialService — wniesienie i przebieg", () => {
     expect((error as InvalidTrialError).problems).toHaveLength(2);
     expect((error as InvalidTrialError).problems[0]).toMatch(/^cvText: /);
     expect(await store.wrappedKey("t-1")).toBeUndefined();
+  });
+
+  it("odpowiada dopiero, gdy wniesienie jest w dzienniku", async () => {
+    const { journal, service } = setup({ llm: () => hanging });
+    await service.file(request);
+    expect((await journal.read("t-1")).map((e) => e.event.type)).toEqual(["TrialFiled"]);
+    await service.close();
+  });
+
+  it("nieudany zapis wniesienia: blad wywolujacego, rozprawa anulowana", async () => {
+    const { journal, service, errors } = setup({ llm: () => hanging });
+    journal.append = () => Promise.reject(new Error("baza padla"));
+    await expect(service.file(request)).rejects.toThrow("baza padla");
+    await service.settled("t-1");
+    expect(service.isRunning("t-1")).toBe(false);
+    expect(errors).toEqual([new Error("baza padla")]);
+  });
+
+  it("uzywa konfiguracji sadu z opcji (modele, proby)", async () => {
+    const config = { ...DEFAULT_CONFIG, models: { ...DEFAULT_CONFIG.models, justification: "claude-haiku-5-5" as const } };
+    const llm = new FakeLlmClient(rehearsalScript);
+    const { service } = setup({ llm: () => llm, config });
+    await service.file(request);
+    await service.settled("t-1");
+    expect(llm.calls.at(-1)).toMatchObject({ label: "justification", model: "claude-haiku-5-5" });
   });
 
   it("budzet rozprawy przekroczony -> rozprawa konczy sie przerwaniem", async () => {
