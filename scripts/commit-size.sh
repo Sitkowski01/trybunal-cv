@@ -2,7 +2,7 @@
 # Liczy linie w staged diffie (dodane + usuniete), pomijajac pliki generowane.
 # Uzycie: commit-size.sh [limit]   — kod wyjscia 1, gdy limit przekroczony.
 LIMIT="${1:-${MAX_COMMIT_LINES:-200}}"
-IGNORE='(^|/)(gradlew|gradlew\.bat|gradle/wrapper/.*|.*\.lock|package-lock\.json|pnpm-lock\.yaml|packages\.lock\.json|go\.sum)$'
+IGNORE='(^|/)(gradlew|gradlew\.bat|gradle/wrapper/.*|.*\.lock|package-lock\.json|pnpm-lock\.yaml|packages\.lock\.json|go\.sum|__snapshots__/.*\.snap)$'   # pliki generowane
 
 total=0
 while IFS=$'\t' read -r added deleted path; do
