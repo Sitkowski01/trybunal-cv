@@ -5,9 +5,19 @@ import type { EventEnvelope, Journal } from "./journal.js";
 /** Zdarzenia, po ktorych rozprawa juz nic nie powie. */
 const TERMINAL = new Set(["VerdictAnnounced", "TrialAborted"]);
 
+/**
+ * Zdarzenie do wyslania: wniesienie bez tekstu CV i oferty, tylko ich dlugosci. Kandydat je zna,
+ * a strumien laduje w pamieci przegladarki, narzedziach deweloperskich i logach proxy.
+ */
+export function publicEvent(envelope: EventEnvelope) {
+  if (envelope.event.type !== "TrialFiled") return envelope;
+  const { cvText, jobOffer, ...rest } = envelope.event;
+  return { ...envelope, event: { ...rest, cvChars: cvText.length, jobOfferChars: jobOffer.length } };
+}
+
 /** Jedno zdarzenie SSE: id = numer zdarzenia, zeby przegladarka wznowila od niego (Last-Event-ID). */
 export function formatEvent(envelope: EventEnvelope): string {
-  return `id: ${String(envelope.seq)}\nevent: ${envelope.event.type}\ndata: ${JSON.stringify(envelope)}\n\n`;
+  return `id: ${String(envelope.seq)}\nevent: ${envelope.event.type}\ndata: ${JSON.stringify(publicEvent(envelope))}\n\n`;
 }
 
 /**
@@ -33,10 +43,16 @@ export interface StreamDeps {
 export async function openStream(trialId: string, afterSeq: number, deps: StreamDeps) {
   const buffered: EventEnvelope[] = [];
   let deliver: ((e: EventEnvelope) => void) | null = null;
-  const unsubscribe = deps.hub.subscribe(trialId, (e) => {
-    if (deliver === null) buffered.push(e);
-    else deliver(e);
-  });
+  // Koniec rozprawy w trakcie odczytu z bazy wylapie sprawdzenie isRunning po nadrobieniu zaleglosci.
+  let stopped: (() => void) | null = null;
+  const unsubscribe = deps.hub.subscribe(
+    trialId,
+    (e) => {
+      if (deliver === null) buffered.push(e);
+      else deliver(e);
+    },
+    () => stopped?.(),
+  );
   let stored: EventEnvelope[];
   try {
     stored = await deps.journal.read(trialId, afterSeq);
@@ -46,6 +62,11 @@ export async function openStream(trialId: string, afterSeq: number, deps: Stream
   }
 
   return (request: IncomingMessage, response: ServerResponse) => {
+    // Klient mogl odejsc w trakcie odczytu z bazy — wtedy zdarzenie "close" juz bylo.
+    if (request.destroyed || response.destroyed) {
+      unsubscribe();
+      return;
+    }
     response.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-transform",
@@ -64,7 +85,7 @@ export async function openStream(trialId: string, afterSeq: number, deps: Stream
       if (reason !== undefined) response.end(formatEnd(reason));
     };
     // Rozlaczenie klienta tylko sprzata — rozprawa trwa dalej, mozna do niej wrocic.
-    request.on("close", () => {
+    response.on("close", () => {
       finish();
     });
     const send = (e: EventEnvelope) => {
@@ -76,6 +97,9 @@ export async function openStream(trialId: string, afterSeq: number, deps: Stream
     stored.forEach(send);
     buffered.forEach(send);
     deliver = send;
+    stopped = () => {
+      finish("interrupted");
+    };
     if (!progress.ended && !deps.isRunning(trialId)) finish("interrupted");
   };
 }

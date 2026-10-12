@@ -7,7 +7,7 @@ import { TrialHub } from "./hub.js";
 import { type EventEnvelope, Journal } from "./journal.js";
 import { rehearsalLlm } from "./rehearsal.js";
 import { type ServiceOptions, TrialService } from "./service.js";
-import { formatEnd, formatEvent, openStream } from "./sse.js";
+import { formatEnd, formatEvent, openStream, publicEvent } from "./sse.js";
 import { InMemoryEventStore } from "./store.js";
 
 const body = { cvText: "Java, Spring.", jobOffer: "Junior Java", debateRounds: 1 };
@@ -141,8 +141,8 @@ describe("openStream — szczelina miedzy odczytem a subskrypcja", () => {
     } as unknown as Journal;
     const write = await openStream("t", 1, { journal, hub, isRunning: () => true, heartbeatMs: 1000 });
     const written: string[] = [];
-    const response = { writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
-    const request = { on: () => request };
+    const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
+    const request = { destroyed: false };
     write(request as never, response as never);
     hub.publish(env(4));
     hub.publish(env(5, true));
@@ -155,6 +155,40 @@ describe("openStream — szczelina miedzy odczytem a subskrypcja", () => {
     const hub = new TrialHub();
     const journal = { read: () => Promise.reject(new Error("404")) } as unknown as Journal;
     await expect(openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 1000 })).rejects.toThrow("404");
+    expect(hub.listenerCount("t")).toBe(0);
+  });
+});
+
+describe("strumien — prywatnosc i koniec bez werdyktu", () => {
+  it("wniesienie idzie bez tekstu CV i oferty, tylko z dlugosciami", () => {
+    const filed: EventEnvelope = {
+      trialId: "t", seq: 1, occurredAt: "2026-10-12T10:00:00.000Z", schemaVersion: 1,
+      event: { type: "TrialFiled", trialId: "t", cvText: "Java, Spring", jobOffer: "Junior", debateRounds: 1 }, calls: [],
+    };
+    expect(publicEvent(filed).event).toEqual({ type: "TrialFiled", trialId: "t", debateRounds: 1, cvChars: 12, jobOfferChars: 6 });
+    expect(formatEvent(filed)).not.toContain("Spring");
+    const other: EventEnvelope = { ...filed, seq: 2, event: { type: "TrialAborted", reason: "x" } };
+    expect(publicEvent(other)).toBe(other);
+  });
+
+  it("rozprawa staje bez zapisanego konca -> strumien konczy sie 'interrupted', a nie wisi", async () => {
+    const hub = new TrialHub();
+    const journal = { read: () => Promise.resolve([]) } as unknown as Journal;
+    const write = await openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 1000 });
+    const written: string[] = [];
+    const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
+    write({ destroyed: false } as never, response as never);
+    hub.stop("t");
+    expect(written.join("")).toBe(formatEnd("interrupted"));
+    expect(hub.listenerCount("t")).toBe(0);
+  });
+
+  it("klient odszedl w trakcie odczytu z bazy: nic nie wysylamy i sprzatamy subskrypcje", async () => {
+    const hub = new TrialHub();
+    const journal = { read: () => Promise.resolve([]) } as unknown as Journal;
+    const write = await openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 1000 });
+    const response = { destroyed: false, writeHead: () => { throw new Error("nie powinno pisac"); } };
+    write({ destroyed: true } as never, response as never);
     expect(hub.listenerCount("t")).toBe(0);
   });
 });
