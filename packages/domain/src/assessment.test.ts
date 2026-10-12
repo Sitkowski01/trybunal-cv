@@ -1,0 +1,98 @@
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+import { type Assessment, AssessmentSchema, findInventedQuotes, ScoreSchema } from "./assessment.js";
+
+const valid: Assessment = {
+  criticId: "techLead",
+  score: 6,
+  recommendation: "invite",
+  summary: "Solidny backend, slabo udokumentowany frontend.",
+  strengths: ["Projekt gieldy z testami mutacyjnymi"],
+  concerns: [{ quote: "Ekspert React", issue: "brak projektu w React", severity: "high" }],
+  rewrites: [
+    {
+      original: "Odpowiadalem za API",
+      proposed: "Zbudowalem API obslugujace 1000 zlecen/s",
+      reason: "liczby zamiast obowiazkow",
+    },
+  ],
+};
+
+const parse = (overrides: Record<string, unknown>) =>
+  AssessmentSchema.safeParse({ ...valid, ...overrides }).success;
+
+describe("AssessmentSchema", () => {
+  it("przyjmuje poprawna ocene", () => {
+    expect(AssessmentSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("przycina biale znaki w tekstach", () => {
+    expect(AssessmentSchema.parse({ ...valid, summary: "  ok  " }).summary).toBe("ok");
+  });
+
+  it.each([
+    ["nieznany krytyk", { criticId: "judge" }],
+    ["ocena 0", { score: 0 }],
+    ["ocena 11", { score: 11 }],
+    ["ocena ulamkowa", { score: 6.5 }],
+    ["nieznana rekomendacja", { recommendation: "maybe" }],
+    ["puste podsumowanie", { summary: "   " }],
+    ["za dlugie podsumowanie", { summary: "x".repeat(1001) }],
+    ["szesc mocnych stron", { strengths: Array.from({ length: 6 }, () => "x") }],
+    ["pusta mocna strona", { strengths: [""] }],
+    ["nieznana waga zastrzezenia", { concerns: [{ quote: "a", issue: "b", severity: "x" }] }],
+    ["zastrzezenie bez cytatu", { concerns: [{ quote: "", issue: "b", severity: "low" }] }],
+    ["poprawka bez zmian", { rewrites: [{ original: "a", proposed: "a", reason: "r" }] }],
+  ])("odrzuca: %s", (_, overrides) => {
+    expect(parse(overrides)).toBe(false);
+  });
+
+  it("dopuszcza puste listy", () => {
+    expect(parse({ strengths: [], concerns: [], rewrites: [] })).toBe(true);
+  });
+
+  it("dopuszcza tekst na granicy dlugosci", () => {
+    expect(parse({ summary: "x".repeat(1000) })).toBe(true);
+  });
+});
+
+describe("ScoreSchema", () => {
+  it("przyjmuje kazda calkowita od 1 do 10", () => {
+    fc.assert(fc.property(fc.integer({ min: 1, max: 10 }), (s) => ScoreSchema.safeParse(s).success));
+  });
+
+  it("odrzuca kazda calkowita spoza 1..10", () => {
+    const outside = fc.oneof(fc.integer({ max: 0 }), fc.integer({ min: 11 }));
+    fc.assert(fc.property(outside, (s) => !ScoreSchema.safeParse(s).success));
+  });
+});
+
+describe("findInventedQuotes", () => {
+  const cv = "Mikolaj Kowalski\nEkspert   React\nOdpowiadalem za\nAPI gieldy.";
+
+  it("nie zglasza cytatow, ktore sa w CV mimo innych bialych znakow i wielkosci liter", () => {
+    expect(findInventedQuotes(valid, cv)).toEqual([]);
+    expect(findInventedQuotes(valid, cv.toUpperCase())).toEqual([]);
+  });
+
+  it("zglasza zmyslony cytat zastrzezenia i zmyslony fragment poprawki", () => {
+    const invented: Assessment = {
+      ...valid,
+      concerns: [{ quote: "10 lat w Google", issue: "x", severity: "low" }],
+      rewrites: [{ original: "Kierowalem zespolem", proposed: "Prowadzilem 5 osob", reason: "r" }],
+    };
+    expect(findInventedQuotes(invented, cv)).toEqual(["10 lat w Google", "Kierowalem zespolem"]);
+  });
+
+  it("cytat bedacy fragmentem CV zawsze jest uznany", () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 1 }), fc.nat(), fc.nat(), (text, a, b) => {
+        const start = a % text.length;
+        const quote = text.slice(start, start + 1 + (b % (text.length - start)));
+        fc.pre(quote.trim().length > 0);
+        const assessment = { ...valid, concerns: [{ quote, issue: "x", severity: "low" as const }], rewrites: [] };
+        return findInventedQuotes(assessment, text).length === 0;
+      }),
+    );
+  });
+});
