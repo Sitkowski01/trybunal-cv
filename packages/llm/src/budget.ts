@@ -1,5 +1,5 @@
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { type LlmClient, LlmError, type LlmResult, type StructuredRequest } from "./client.js";
+import { type LlmClient, LlmError, type LlmResult, LlmTransportError, type StructuredRequest } from "./client.js";
 import { costNanoUsd, formatUsd } from "./pricing.js";
 
 export class BudgetExceededError extends Error {
@@ -25,26 +25,36 @@ const encoder = new TextEncoder();
 const bytes = (text: string) => encoder.encode(text).length;
 
 /**
- * Najdrozszy mozliwy koszt zapytania, zanim je wyslemy. Tokenizer dzieli bajty UTF-8, wiec
- * tokenow wejscia nie ma wiecej niz bajtow promptu i schematu; wyjscia nie wiecej niz maxTokens.
- * Liczymy bez cache — tak, jakby nic nie trafilo.
+ * Najdrozszy mozliwy koszt zapytania, zanim je wyslemy:
+ * - tokenizer dzieli bajty UTF-8, wiec tokenow wejscia nie ma wiecej niz bajtow tekstu i schematu;
+ * - kazdy token wejscia liczymy po stawce zapisu do cache (1,25x zwyklego wejscia) — to najdrozsza
+ *   stawka wejscia, a poczatek promptu przy chybionym cache naprawde jest zapisywany;
+ * - wyjscia nie wiecej niz maxTokens.
  */
 export function worstCaseCostNanoUsd(request: StructuredRequest<unknown>): number {
-  const schema = JSON.stringify(zodOutputFormat(request.schema).schema);
-  const prompt = bytes(request.sharedContext) + bytes(request.instructions) + bytes(request.task) + bytes(schema);
+  const texts = [
+    request.sharedContext,
+    request.instructions,
+    request.task,
+    JSON.stringify(zodOutputFormat(request.schema).schema),
+  ];
+  const promptTokens = texts.reduce((sum, t) => sum + bytes(t), 0) + OVERHEAD_TOKENS;
   return costNanoUsd(request.model, {
-    inputTokens: prompt + OVERHEAD_TOKENS,
-    outputTokens: request.maxTokens,
-    cacheWriteTokens: 0,
+    inputTokens: 0,
+    cacheWriteTokens: promptTokens,
     cacheReadTokens: 0,
+    outputTokens: request.maxTokens,
   });
 }
 
 /**
  * Twardy limit kosztu, np. jednej rozprawy. Przed zapytaniem rezerwuje najgorszy koszt — pieciu
- * krytykow pytajacych naraz nie przebije limitu, bo kazdy widzi rezerwacje pozostalych. Po
- * odpowiedzi rozlicza koszt faktyczny, takze nieudanej (tokeny zuzyte, odpowiedz do niczego).
- * Anulowane zapytanie nie podaje zuzycia — liczymy je jako zero.
+ * krytykow pytajacych naraz nie przebije limitu, bo kazdy widzi rezerwacje pozostalych.
+ * Po zapytaniu rozlicza:
+ * - odpowiedz (takze odrzucona przez schemat) — koszt faktyczny z liczby tokenow;
+ * - brak odpowiedzi, ktory mogl kosztowac (przerwanie, timeout, 5xx) albo nieznany blad — cala
+ *   rezerwacje, bo zuzycia nie znamy, a limit ma byc twardy;
+ * - odmowe API przed praca modelu (429, 529, inne 4xx) — zero.
  */
 export class BudgetedLlmClient implements LlmClient {
   private spent = 0;
@@ -70,12 +80,20 @@ export class BudgetedLlmClient implements LlmClient {
       this.spent += result.costNanoUsd;
       return result;
     } catch (error) {
-      if (error instanceof LlmError) {
-        this.spent += error.costNanoUsd;
-      }
+      this.spent += chargeFor(error, worst);
       throw error;
     } finally {
       this.reserved -= worst;
     }
   }
+}
+
+function chargeFor(error: unknown, worst: number): number {
+  if (error instanceof LlmError) {
+    return error.costNanoUsd;
+  }
+  if (error instanceof LlmTransportError && !error.mayHaveBeenBilled) {
+    return 0;
+  }
+  return worst;
 }

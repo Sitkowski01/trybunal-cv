@@ -1,16 +1,17 @@
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { BudgetedLlmClient, BudgetExceededError, OVERHEAD_TOKENS, worstCaseCostNanoUsd } from "./budget.js";
-import { InvalidOutputError, type LlmClient, type LlmResult, type StructuredRequest } from "./client.js";
+import { InvalidOutputError, type LlmClient, type LlmResult, LlmTransportError, type StructuredRequest } from "./client.js";
 import { FAKE_USAGE, FakeLlmClient } from "./fake.js";
-import { costNanoUsd } from "./pricing.js";
+import { costNanoUsd, MODELS } from "./pricing.js";
 
 const Answer = z.object({ ok: z.boolean() });
 const request: StructuredRequest<z.infer<typeof Answer>> = {
   label: "a",
   model: "claude-haiku-5-5",
   maxTokens: 100,
-  sharedContext: "CV",
+  sharedContext: "Zasady i CV",
   instructions: "HR",
   task: "Ocen",
   schema: Answer,
@@ -18,18 +19,27 @@ const request: StructuredRequest<z.infer<typeof Answer>> = {
 const worst = worstCaseCostNanoUsd(request);
 const actual = costNanoUsd("claude-haiku-5-5", FAKE_USAGE);
 const answering = () => new FakeLlmClient(() => ({ ok: true }));
+const failing = (error: Error): LlmClient => ({ generate: () => Promise.reject(error) });
 
 describe("worstCaseCostNanoUsd", () => {
-  it("liczy bajty UTF-8 promptu i schematu plus zapas, wyjscie po maxTokens, bez cache", () => {
-    const schemaBytes = JSON.stringify({ type: "object", properties: { ok: { type: "boolean" } }, additionalProperties: false, required: ["ok"], description: '{$schema: "https://json-schema.org/draft/2020-12/schema"}' }).length;
-    const inputTokens = "CV".length + "HR".length + "Ocen".length + schemaBytes + OVERHEAD_TOKENS;
-    expect(worst).toBe(inputTokens * 100 + 100 * 500);
+  const haiku = MODELS["claude-haiku-5-5"].standard;
+
+  it("kazdy bajt promptu i schematu jako token po stawce zapisu do cache, wyjscie po maxTokens", () => {
+    const schemaBytes = JSON.stringify(zodOutputFormat(Answer).schema).length;
+    const promptBytes = "Zasady i CV".length + "HR".length + "Ocen".length;
+    expect(worst).toBe((promptBytes + schemaBytes + OVERHEAD_TOKENS) * haiku.cacheWrite + 100 * haiku.output);
+  });
+
+  it("zapis do cache to najdrozsza stawka wejscia w kazdym modelu", () => {
+    for (const { standard } of Object.values(MODELS)) {
+      expect(standard.cacheWrite).toBeGreaterThan(standard.input);
+    }
   });
 
   it("polska litera to dwa bajty, wiec dwa tokeny w najgorszym przypadku", () => {
     const ascii = worstCaseCostNanoUsd({ ...request, task: "zaz" });
     const polish = worstCaseCostNanoUsd({ ...request, task: "żaż" });
-    expect(polish - ascii).toBe(2 * 100);
+    expect(polish - ascii).toBe(2 * haiku.cacheWrite);
   });
 });
 
@@ -57,18 +67,29 @@ describe("BudgetedLlmClient", () => {
     await expect(llm.generate(request)).rejects.toMatchObject({ spentNanoUsd: actual });
   });
 
-  it("nieudana odpowiedz modelu tez kosztuje", async () => {
+  it("odrzucona odpowiedz modelu kosztuje tyle, ile zuzyla", async () => {
     const llm = new BudgetedLlmClient(new FakeLlmClient(() => "nie JSON"), 10 * worst);
     await expect(llm.generate(request)).rejects.toBeInstanceOf(InvalidOutputError);
     expect(llm.spentNanoUsd).toBe(actual);
   });
 
-  it("blad spoza modelu (np. sieci) nie zmienia wydatkow i zwalnia rezerwacje", async () => {
-    const failing: LlmClient = { generate: () => Promise.reject(new Error("ECONNRESET")) };
-    const llm = new BudgetedLlmClient(failing, worst);
-    await expect(llm.generate(request)).rejects.toThrow("ECONNRESET");
-    await expect(llm.generate(request)).rejects.toThrow("ECONNRESET");
+  it("odmowa API przed praca modelu (np. 429) nie kosztuje", async () => {
+    const llm = new BudgetedLlmClient(failing(new LlmTransportError("429", true, false, 429)), worst);
+    await expect(llm.generate(request)).rejects.toBeInstanceOf(LlmTransportError);
+    await expect(llm.generate(request)).rejects.toBeInstanceOf(LlmTransportError);
     expect(llm.spentNanoUsd).toBe(0);
+  });
+
+  it("brak odpowiedzi, ktory mogl kosztowac (przerwanie, timeout), liczy cala rezerwacje", async () => {
+    const llm = new BudgetedLlmClient(failing(new LlmTransportError("timeout", true, true)), 10 * worst);
+    await expect(llm.generate(request)).rejects.toThrow("timeout");
+    expect(llm.spentNanoUsd).toBe(worst);
+  });
+
+  it("nieznany blad tez liczy cala rezerwacje — limit ma byc twardy", async () => {
+    const llm = new BudgetedLlmClient(failing(new Error("ECONNRESET")), 10 * worst);
+    await expect(llm.generate(request)).rejects.toThrow("ECONNRESET");
+    expect(llm.spentNanoUsd).toBe(worst);
   });
 
   it("rownolegle zapytania widza swoje rezerwacje: drugie nie wejdzie, poki pierwsze trwa", async () => {
