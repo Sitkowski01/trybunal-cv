@@ -36,7 +36,7 @@ export const DEFAULT_CONFIG: CourtConfig = {
     statement: "claude-sonnet-5-5",
     justification: "claude-opus-5-5",
   },
-  maxTokens: { assessment: 2000, prosecution: 1500, statement: 800, justification: 1500 },
+  maxTokens: { assessment: 3000, prosecution: 1500, statement: 800, justification: 2000 },
   maxAttempts: 3,
 };
 

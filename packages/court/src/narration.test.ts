@@ -47,18 +47,26 @@ describe("narrate", () => {
 });
 
 describe("costSummary", () => {
-  const call = (outcome: CallRecord["outcome"], costNanoUsd: number): CallRecord => ({
+  const call = (outcome: CallRecord["outcome"], costNanoUsd: number, costKnown = true): CallRecord => ({
     label: "a",
     attempt: 1,
     model: "claude-sonnet-5-5",
     outcome,
+    usage: null,
     costNanoUsd,
+    costKnown,
     durationMs: 1,
   });
 
   it("sumuje koszt wszystkich prob i liczy nieudane", () => {
     expect(costSummary([call("ok", 1_000_000), call("invalid", 500_000), call("transport", 0)])).toBe(
       "Koszt: $0.0015 za 3 wywolan (nieudanych: 2)",
+    );
+  });
+
+  it("mowi wprost, gdy czesci kosztow nie znamy", () => {
+    expect(costSummary([call("ok", 100_000), call("transport", 0, false)])).toBe(
+      "Koszt: $0.0001 za 2 wywolan (nieudanych: 1, koszt 1 nieznany — budzet liczy je jako najdrozsze)",
     );
   });
 

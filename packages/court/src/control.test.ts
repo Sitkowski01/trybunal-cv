@@ -80,6 +80,13 @@ describe("abortReason", () => {
 });
 
 describe("sleep", () => {
+  it("anulowanie przerywa czekanie od razu", async () => {
+    const controller = new AbortController();
+    const waiting = sleep(60_000, controller.signal);
+    controller.abort(new Error("anulowano"));
+    await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("czeka i konczy sie bez wartosci", async () => {
     const started = Date.now();
     await expect(sleep(20)).resolves.toBeUndefined();

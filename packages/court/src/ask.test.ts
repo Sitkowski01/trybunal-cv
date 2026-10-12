@@ -9,7 +9,7 @@ import {
 } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ask, backoffMs, type CallRecord, StepFailedError } from "./ask.js";
+import { ask, backoffMs, type CallRecord, MAX_OUTPUT_TOKENS, MAX_WAIT_MS, StepFailedError } from "./ask.js";
 
 const Answer = z.object({ score: z.number() });
 const request: StructuredRequest<z.infer<typeof Answer>> = {
@@ -62,7 +62,9 @@ describe("ask", () => {
   it("przyjmuje poprawna odpowiedz i zapisuje probe z kosztem i czasem", async () => {
     const { result, calls } = run(scripted(ok(7)).llm);
     expect(await result).toEqual({ score: 7 });
-    expect(calls).toEqual([{ label: "assessment:hr", attempt: 1, model: "claude-sonnet-5-5", outcome: "ok", costNanoUsd: 7, durationMs: 30 }]);
+    expect(calls).toEqual([
+      { label: "assessment:hr", attempt: 1, model: "claude-sonnet-5-5", outcome: "ok", usage: FAKE_USAGE, costNanoUsd: 7, costKnown: true, durationMs: 30 },
+    ]);
   });
 
   it("po odpowiedzi spoza schematu ponawia z ta odpowiedzia i lista problemow", async () => {
@@ -76,10 +78,11 @@ describe("ask", () => {
     ]);
   });
 
-  it("odpowiedz lamiaca regule spoza schematu (np. zmyslony cytat) tez wraca z uwagami", async () => {
+  it("odpowiedz lamiaca regule spoza schematu (np. zmyslony cytat) wraca z uwagami i jest 'rejected'", async () => {
     const { llm, requests } = scripted(ok(42), ok(4));
-    const { result } = run(llm, (d) => (d.score > 10 ? ["cytat spoza CV"] : []));
+    const { result, calls } = run(llm, (d) => (d.score > 10 ? ["cytat spoza CV"] : []));
     expect(await result).toEqual({ score: 4 });
+    expect(calls.map((c) => c.outcome)).toEqual(["rejected", "ok"]);
     expect(requests[1]?.retry).toEqual({ previousOutput: '{"score":42}', problems: ["cytat spoza CV"] });
   });
 
@@ -87,6 +90,14 @@ describe("ask", () => {
     const { llm, requests } = scripted(incomplete("max_tokens"), incomplete("max_tokens"), ok(1));
     await run(llm).result;
     expect(requests.map((r) => r.maxTokens)).toEqual([100, 200, 400]);
+  });
+
+  it("limit tokenow rosnie najwyzej do sufitu, a na suficie nie ponawia", async () => {
+    const big = { ...request, maxTokens: 12_000 };
+    const { llm, requests } = scripted(incomplete("max_tokens"), incomplete("max_tokens"), ok(1));
+    const options = { maxAttempts: 3, sleep: () => Promise.resolve(), record: () => undefined };
+    await expect(ask(llm, big, options)).rejects.toMatchObject({ stopReason: "max_tokens" });
+    expect(requests.map((r) => r.maxTokens)).toEqual([12_000, MAX_OUTPUT_TOKENS]);
   });
 
   it("odmowy modelu nie ponawia", async () => {
@@ -102,11 +113,42 @@ describe("ask", () => {
     const { result, sleeps, calls } = run(scripted(busy(7000), busy(null), ok(2)).llm);
     expect(await result).toEqual({ score: 2 });
     expect(sleeps).toEqual([7000, backoffMs(2)]);
-    expect(calls.map((c) => [c.outcome, c.costNanoUsd])).toEqual([
-      ["transport", 0],
-      ["transport", 0],
-      ["ok", 7],
+    expect(calls.map((c) => [c.outcome, c.costNanoUsd, c.costKnown])).toEqual([
+      ["transport", 0, true],
+      ["transport", 0, true],
+      ["ok", 7, true],
     ]);
+  });
+
+  it("czeka najwyzej MAX_WAIT_MS, nawet gdy API kaze dluzej", async () => {
+    const { result, sleeps } = run(scripted(new LlmTransportError("429", true, false, 429, 600_000), ok(1)).llm);
+    await result;
+    expect(sleeps).toEqual([MAX_WAIT_MS]);
+  });
+
+  it("brak odpowiedzi, ktory mogl kosztowac (timeout), ma koszt nieznany", async () => {
+    const { result, calls } = run(scripted(new LlmTransportError("timeout", true, true), ok(1)).llm);
+    await result;
+    expect(calls[0]).toMatchObject({ outcome: "transport", usage: null, costKnown: false });
+  });
+
+  it("anulowanie przed proba: nic nie idzie do modelu, a czekanie dostaje sygnal", async () => {
+    const controller = new AbortController();
+    const { llm, requests } = scripted(new LlmTransportError("429", true, false, 429), ok(1));
+    const waits: (AbortSignal | undefined)[] = [];
+    const options = {
+      maxAttempts: 3,
+      signal: controller.signal,
+      sleep: (_: number, signal?: AbortSignal) => {
+        waits.push(signal);
+        controller.abort(new Error("anulowano"));
+        return Promise.resolve();
+      },
+      record: () => undefined,
+    };
+    await expect(ask(llm, request, options)).rejects.toThrow("anulowano");
+    expect(requests).toHaveLength(1);
+    expect(waits).toEqual([controller.signal]);
   });
 
   it("bledu transportu, ktorego nie warto ponawiac, nie ponawia", async () => {

@@ -30,5 +30,7 @@ export function narrate(event: TrialEvent, state: TrialState): string {
 export function costSummary(calls: readonly CallRecord[]): string {
   const total = calls.reduce((sum, c) => sum + c.costNanoUsd, 0);
   const failed = calls.filter((c) => c.outcome !== "ok").length;
-  return `Koszt: ${formatUsd(total)} za ${String(calls.length)} wywolan (nieudanych: ${String(failed)})`;
+  const unknown = calls.filter((c) => !c.costKnown).length;
+  const note = unknown === 0 ? "" : `, koszt ${String(unknown)} nieznany — budzet liczy je jako najdrozsze`;
+  return `Koszt: ${formatUsd(total)} za ${String(calls.length)} wywolan (nieudanych: ${String(failed)}${note})`;
 }

@@ -1,6 +1,9 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 /** Mechanika przebiegu rozprawy, ktora nie zalezy od tego, co mowia krytycy. */
 
-export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Czekanie, ktore konczy sie od razu (odrzuceniem), gdy sygnal przerwie rozprawe. */
+export const sleep = (ms: number, signal?: AbortSignal): Promise<void> => delay(ms, undefined, signal === undefined ? {} : { signal });
 
 /**
  * Rownolegle zadania: jesli jedno zawiedzie, pozostale sa anulowane, a blad wychodzi dopiero,
