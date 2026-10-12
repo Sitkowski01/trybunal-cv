@@ -1,0 +1,166 @@
+import type { LlmClient } from "@trybunal/llm";
+import type { FastifyInstance } from "fastify";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import { afterEach, describe, expect, it } from "vitest";
+import { buildApp, MAX_PDF_BYTES } from "./app.js";
+import { newKey } from "./crypto.js";
+import { TrialHub } from "./hub.js";
+import { Journal } from "./journal.js";
+import { rehearsalLlm } from "./rehearsal.js";
+import { type ServiceOptions, TrialService } from "./service.js";
+import { InMemoryEventStore } from "./store.js";
+
+const body = { cvText: "Anna Nowak. Java, Spring.", jobOffer: "Junior Java", debateRounds: 1, candidateName: "Anna Nowak" };
+const hanging: LlmClient = {
+  generate: (_req, signal) => new Promise((_res, reject) => signal?.addEventListener("abort", () => { reject(new Error("anulowano")); })),
+};
+
+let app: FastifyInstance | undefined;
+afterEach(async () => {
+  await app?.close();
+  app = undefined;
+});
+
+async function setup(overrides: Partial<ServiceOptions> = {}, rateLimitMax = 100) {
+  const journal = new Journal(new InMemoryEventStore(), newKey());
+  const hub = new TrialHub();
+  let ids = 0;
+  const service = new TrialService({
+    journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3, newId: () => `t-${String(++ids)}`, ...overrides,
+  });
+  app = await buildApp({ service, journal, hub, rateLimit: { max: rateLimitMax, timeWindowMs: 60_000 }, heartbeatMs: 20 });
+  return { app, service, journal, hub };
+}
+
+/** Formularz multipart z plikiem PDF albo dowolnymi bajtami w polu "cv". */
+function multipart(fields: Record<string, string>, file?: { name: string; bytes: Uint8Array }) {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  if (file !== undefined) form.append(file.name, new Blob([new Uint8Array(file.bytes)], { type: "application/pdf" }), "cv.pdf");
+  const request = new Request("http://x", { method: "POST", body: form });
+  return request.arrayBuffer().then((payload) => ({ payload: Buffer.from(payload), headers: { "content-type": request.headers.get("content-type") ?? "" } }));
+}
+
+async function pdf(text: string) {
+  const doc = await PDFDocument.create();
+  doc.addPage().drawText(text, { x: 20, y: 700, size: 12, font: await doc.embedFont(StandardFonts.Helvetica) });
+  return doc.save();
+}
+
+describe("POST /trials", () => {
+  it("JSON: 202 z id, adresem strumienia i licznikiem anonimizacji", async () => {
+    const { app, service } = await setup();
+    const res = await app.inject({ method: "POST", url: "/trials", payload: body });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ trialId: "t-1", anonymized: { name: 1 }, eventsUrl: "/trials/t-1/events" });
+    await service.settled("t-1");
+  });
+
+  it("formularz z PDF: CV z pliku, liczba rund z pola tekstowego", async () => {
+    const { app, service, journal } = await setup();
+    const form = await multipart({ jobOffer: "Junior Java", debateRounds: "0" }, { name: "cv", bytes: await pdf("Java, Spring, Kafka") });
+    const res = await app.inject({ method: "POST", url: "/trials", ...form });
+    expect(res.statusCode).toBe(202);
+    await service.settled("t-1");
+    expect((await journal.read("t-1"))[0]?.event).toMatchObject({ cvText: "Java, Spring, Kafka", debateRounds: 0 });
+  });
+
+  it("formularz z CV jako tekstem tez dziala", async () => {
+    const { app, service } = await setup();
+    const res = await app.inject({ method: "POST", url: "/trials", ...(await multipart({ cvText: "Java", jobOffer: "Java" })) });
+    expect(res.statusCode).toBe(202);
+    await service.settled("t-1");
+  });
+
+  it.each([
+    [{ ...body, debateRounds: 7 }, "debateRounds"],
+    [{ jobOffer: "x" }, "cvText"],
+    [{ ...body, cvText: " " }, "cvText"],
+  ])("bledne dane -> 400 z problemami (%#)", async (payload, field) => {
+    const { app } = await setup();
+    const res = await app.inject({ method: "POST", url: "/trials", payload });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ problems: string[] }>().problems[0]).toMatch(new RegExp(`^${field}: `));
+  });
+
+  it("plik, ktory nie jest PDF-em -> 422; plik w innym polu -> 400", async () => {
+    const { app } = await setup();
+    const notPdf = await multipart({ jobOffer: "x" }, { name: "cv", bytes: new TextEncoder().encode("hej") });
+    expect((await app.inject({ method: "POST", url: "/trials", ...notPdf })).json()).toEqual({ error: "Plik nie jest PDF-em" });
+    const wrong = await multipart({ jobOffer: "x" }, { name: "zdjecie", bytes: await pdf("x") });
+    const res = await app.inject({ method: "POST", url: "/trials", ...wrong });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("PDF ponad limit rozmiaru -> 413", async () => {
+    const { app } = await setup();
+    const big = await multipart({ jobOffer: "x" }, { name: "cv", bytes: new Uint8Array(MAX_PDF_BYTES + 1) });
+    expect((await app.inject({ method: "POST", url: "/trials", ...big })).statusCode).toBe(413);
+  });
+
+  it("za duzo rozpraw naraz -> 429 z Retry-After; dzienny budzet -> 503", async () => {
+    const busy = await setup({ llm: () => hanging, maxRunning: 1 });
+    await busy.app.inject({ method: "POST", url: "/trials", payload: body });
+    const res = await busy.app.inject({ method: "POST", url: "/trials", payload: body });
+    expect([res.statusCode, res.headers["retry-after"]]).toEqual([429, "30"]);
+    await busy.service.close();
+    await busy.app.close();
+
+    const broke = await setup({ trialBudgetNanoUsd: 2e10 });
+    expect((await broke.app.inject({ method: "POST", url: "/trials", payload: body })).statusCode).toBe(503);
+  });
+
+  it("limit wniesien z jednego IP -> 429", async () => {
+    const { app, service } = await setup({}, 1);
+    expect((await app.inject({ method: "POST", url: "/trials", payload: body })).statusCode).toBe(202);
+    expect((await app.inject({ method: "POST", url: "/trials", payload: body })).statusCode).toBe(429);
+    await service.settled("t-1");
+  });
+});
+
+describe("GET /trials/:id, anulowanie, zapomnienie", () => {
+  it("stan rozprawy bez tekstu CV i oferty", async () => {
+    const { app, service } = await setup();
+    await app.inject({ method: "POST", url: "/trials", payload: body });
+    await service.settled("t-1");
+    const state = (await app.inject({ url: "/trials/t-1" })).json<Record<string, unknown>>();
+    expect(state).toMatchObject({ trialId: "t-1", phase: "closed", running: false, verdict: { decision: "invite" } });
+    expect(state.lastSeq).toBe(13);
+    expect(JSON.stringify(state)).not.toContain("Java, Spring");
+  });
+
+  it("nieznana rozprawa -> 404 na kazdym adresie", async () => {
+    const { app } = await setup();
+    for (const [method, url] of [["GET", "/trials/x"], ["GET", "/trials/x/events"], ["POST", "/trials/x/cancel"], ["DELETE", "/trials/x"]] as const) {
+      expect((await app.inject({ method, url })).statusCode).toBe(404);
+    }
+  });
+
+  it("cancel trwajacej -> 202, zakonczonej -> 409", async () => {
+    const { app, service } = await setup({ llm: () => hanging });
+    await app.inject({ method: "POST", url: "/trials", payload: body });
+    expect((await app.inject({ method: "POST", url: "/trials/t-1/cancel" })).statusCode).toBe(202);
+    await service.settled("t-1");
+    expect((await app.inject({ method: "POST", url: "/trials/t-1/cancel" })).statusCode).toBe(409);
+  });
+
+  it("DELETE zapomina rozprawe: 204, potem 410 przy odczycie", async () => {
+    const { app } = await setup({ llm: () => hanging });
+    await app.inject({ method: "POST", url: "/trials", payload: body });
+    expect((await app.inject({ method: "DELETE", url: "/trials/t-1" })).statusCode).toBe(204);
+    const res = await app.inject({ url: "/trials/t-1/events" });
+    expect(res.statusCode).toBe(410);
+  });
+
+  it("nieoczekiwany blad -> 500 bez szczegolow", async () => {
+    const { app, journal } = await setup();
+    journal.read = () => Promise.reject(new Error("tajne szczegoly bazy"));
+    const res = await app.inject({ url: "/trials/t-1" });
+    expect([res.statusCode, res.json()]).toEqual([500, { error: "Blad serwera" }]);
+  });
+
+  it("GET /health", async () => {
+    const { app } = await setup();
+    expect((await app.inject({ url: "/health" })).json()).toEqual({ ok: true });
+  });
+});
