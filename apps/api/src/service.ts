@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type CourtConfig, runTrial } from "@trybunal/court";
-import { TrialEventSchema } from "@trybunal/domain";
+import { MAX_CV_CHARS, MAX_JOB_OFFER_CHARS, TrialEventSchema } from "@trybunal/domain";
 import { BudgetedLlmClient, type LlmClient } from "@trybunal/llm";
 import type { TrialHub } from "./hub.js";
 import type { Journal } from "./journal.js";
@@ -13,6 +13,8 @@ export interface FileRequest {
   /** Imie i nazwisko kandydata do usuniecia z CV — nie da sie go pewnie wykryc w tekscie. */
   readonly candidateName?: string;
 }
+
+export const MAX_NAME_CHARS = 200;
 
 export interface Filed {
   readonly trialId: string;
@@ -27,12 +29,12 @@ export class InvalidTrialError extends Error {
   }
 }
 
-/** Sad nie przyjmie teraz sprawy: za duzo rozpraw naraz albo wyczerpany budzet dnia (429/503). */
+/** Sad nie przyjmie teraz sprawy: za duzo rozpraw naraz (429), wyczerpany budzet dnia albo zamykanie serwera (503). */
 export class CourtBusyError extends Error {
   override readonly name = "CourtBusyError";
   constructor(
     message: string,
-    readonly reason: "concurrency" | "dailyBudget",
+    readonly reason: "concurrency" | "dailyBudget" | "closing",
   ) {
     super(message);
   }
@@ -69,10 +71,24 @@ export class TrialService {
   private readonly running = new Map<string, Running>();
   /** Wniesienia miedzy sprawdzeniem limitow a startem — zajmuja miejsce, zeby dwa naraz nie przeszly obok limitu. */
   private filing = 0;
+  private closing = false;
 
   constructor(private readonly options: ServiceOptions) {}
 
   async file(request: FileRequest): Promise<Filed> {
+    if (this.closing) {
+      throw new CourtBusyError("Serwer jest zamykany — sprobuj za chwile", "closing");
+    }
+    // Dlugosc przed anonimizacja: wyrazenia regularne na megabajtowym tekscie to zablokowany serwer.
+    const tooLong = [
+      ["cvText", request.cvText, MAX_CV_CHARS],
+      ["jobOffer", request.jobOffer, MAX_JOB_OFFER_CHARS],
+      ["candidateName", request.candidateName ?? "", MAX_NAME_CHARS],
+    ] as const;
+    const problems = tooLong.filter(([, text, max]) => text.length > max).map(([field, , max]) => `${field}: najwyzej ${String(max)} znakow`);
+    if (problems.length > 0) {
+      throw new InvalidTrialError(problems);
+    }
     const cv = anonymize(request.cvText, request.candidateName);
     // Oferta tez bywa z kontaktem do rekrutera — model go nie potrzebuje.
     const offer = anonymize(request.jobOffer);
@@ -124,6 +140,7 @@ export class TrialService {
 
   /** Zamkniecie serwera: anuluje trwajace rozprawy i czeka, az zapisza przerwanie. */
   async close(): Promise<void> {
+    this.closing = true;
     const all = [...this.running.values()];
     all.forEach((r) => { r.controller.abort(); });
     await Promise.all(all.map((r) => r.done));
@@ -154,6 +171,8 @@ export class TrialService {
     let seq = 0;
     let writes = Promise.resolve();
     let failure: { readonly error: unknown } | undefined;
+    // Koszt zdarzen, ktorych nie zapisano po awarii — nie trafi do budzetu dnia, wiec przynajmniej do logow.
+    let lostNanoUsd = 0;
     const done = runTrial(input, {
       llm: new BudgetedLlmClient(this.options.llm(), this.options.trialBudgetNanoUsd),
       signal: controller.signal,
@@ -163,21 +182,34 @@ export class TrialService {
       onEvent: (event, _state, calls) => {
         const next = ++seq;
         writes = writes.then(async () => {
-          if (failure !== undefined) return;
+          if (failure !== undefined) {
+            lostNanoUsd += calls.reduce((sum, c) => sum + c.costNanoUsd, 0);
+            return;
+          }
+          let envelope;
           try {
-            hub.publish(await journal.append(input.trialId, next, event, calls));
+            envelope = await journal.append(input.trialId, next, event, calls);
           } catch (error) {
             failure = { error };
+            lostNanoUsd += calls.reduce((sum, c) => sum + c.costNanoUsd, 0);
             controller.abort();
             onError?.(error, input.trialId);
+            return;
           }
+          // Poza try: blad sluchacza (zerwany strumien) to nie awaria zapisu i nie przerywa rozprawy.
+          hub.publish(envelope);
         });
       },
     })
       .then(() => writes)
       // Stryker disable next-line all: runTrial nie odrzuca przy poprawnym wejsciu (sprawdzone w file) — to tylko ochrona procesu.
       .catch(/* v8 ignore next */ (error: unknown) => onError?.(error, input.trialId))
-      .finally(() => this.running.delete(input.trialId));
+      .finally(() => {
+        this.running.delete(input.trialId);
+        if (lostNanoUsd > 0) onError?.(new Error(`Niezapisany koszt rozprawy po awarii zapisu: ${String(lostNanoUsd)} nano-USD`), input.trialId);
+        // Strumienie czekajace na koniec dostaja go nawet wtedy, gdy werdyktu ani przerwania nie udalo sie zapisac.
+        hub.stop(input.trialId);
+      });
     this.running.set(input.trialId, { controller, done });
     // runTrial zglasza wniesienie synchronicznie, przed pierwszym await — jego zapis jest juz w kolejce.
     return writes.then(() => {

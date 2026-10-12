@@ -99,6 +99,40 @@ describe("TrialService — wniesienie i przebieg", () => {
     expect(llm.calls.at(-1)).toMatchObject({ label: "justification", model: "claude-haiku-5-5" });
   });
 
+  it("za dlugie pola odrzucone przed anonimizacja, z limitem w komunikacie", async () => {
+    const { service } = setup();
+    const error = (await service
+      .file({ cvText: "a".repeat(30_001), jobOffer: "b".repeat(10_001), debateRounds: 1, candidateName: "c".repeat(201) })
+      .catch((e: unknown) => e)) as InvalidTrialError;
+    expect(error.problems).toEqual(["cvText: najwyzej 30000 znakow", "jobOffer: najwyzej 10000 znakow", "candidateName: najwyzej 200 znakow"]);
+  });
+
+  it("dokladnie na limicie dlugosci przechodzi", async () => {
+    const { service } = setup({ llm: () => hanging });
+    await expect(service.file({ ...request, cvText: "a".repeat(30_000), jobOffer: "b".repeat(10_000), candidateName: "c".repeat(200) })).resolves.toBeDefined();
+    await service.close();
+  });
+
+  it("wyjatek sluchacza strumienia nie przerywa rozprawy ani zapisu", async () => {
+    const store = new InMemoryEventStore();
+    const journal = new Journal(store, newKey());
+    const hub = new TrialHub();
+    hub.subscribe("t-1", () => { throw new Error("zerwany strumien"); });
+    const service = new TrialService({ journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: USD, dailyBudgetNanoUsd: 10 * USD, maxRunning: 1, newId: () => "t-1" });
+    await service.file(request);
+    await service.settled("t-1");
+    expect((await journal.read("t-1")).at(-1)?.event.type).toBe("VerdictAnnounced");
+  });
+
+  it("po zakonczeniu rozprawy sluchacze dostaja stop", async () => {
+    const { service, hub } = setup();
+    const stopped: string[] = [];
+    hub.subscribe("t-1", () => undefined, () => stopped.push("stop"));
+    await service.file(request);
+    await service.settled("t-1");
+    expect(stopped).toEqual(["stop"]);
+  });
+
   it("budzet rozprawy przekroczony -> rozprawa konczy sie przerwaniem", async () => {
     const { journal, service } = setup({ trialBudgetNanoUsd: 1 });
     await service.file(request);
@@ -170,12 +204,21 @@ describe("TrialService — anulowanie, zapomnienie, awarie", () => {
   it("awaria zapisu: rozprawa anulowana, blad zgloszony raz, dalsze zdarzenia nie ida do sluchaczy", async () => {
     const { service, journal, hub, errors } = setup();
     const append = journal.append.bind(journal);
-    journal.append = (id, seq, event, calls) => (seq === 3 ? Promise.reject(new Error("baza padla")) : append(id, seq, event, calls));
+    let lost = 0;
+    journal.append = (id, seq, event, calls) => {
+      if (seq >= 3) lost += calls.reduce((sum, c) => sum + c.costNanoUsd, 0);
+      return seq === 3 ? Promise.reject(new Error("baza padla")) : append(id, seq, event, calls);
+    };
     const heard: number[] = [];
     hub.subscribe("t-1", (e) => heard.push(e.seq));
     await service.file(request);
     await service.settled("t-1");
-    expect(errors).toEqual([new Error("baza padla")]);
+    expect(errors[0]).toEqual(new Error("baza padla"));
+    // Koszt zdarzen po awarii nie trafil do dziennika ani budzetu dnia — przynajmniej jest w logach.
+    // Wiecej niz koszt zdarzenia, ktorego zapis padl: doliczone sa tez pominiete pozniej.
+    const logged = Number(/: (\d+) nano-USD$/u.exec((errors[1] as Error).message)?.[1]);
+    expect(logged).toBeGreaterThan(lost);
+    expect(errors).toHaveLength(2);
     expect(heard).toEqual([1, 2]);
     expect(service.isRunning("t-1")).toBe(false);
   });
@@ -188,5 +231,6 @@ describe("TrialService — anulowanie, zapomnienie, awarie", () => {
     for (const id of ["t-1", "t-2"]) {
       expect((await journal.read(id)).at(-1)?.event.type).toBe("TrialAborted");
     }
+    await expect(service.file(request)).rejects.toEqual(new CourtBusyError("Serwer jest zamykany — sprobuj za chwile", "closing"));
   });
 });
