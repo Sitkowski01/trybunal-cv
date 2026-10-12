@@ -1,39 +1,15 @@
 import { type Assessment, findInventedQuotes, ScoreSchema } from "./assessment.js";
 import { CRITIC_IDS, type CriticId } from "./critics.js";
+import { MAX_DEBATE_ROUNDS, type TrialEvent } from "./events.js";
 import { deliberate, RULE_VERSION, type Scores, type Verdict } from "./verdict.js";
 
 /**
  * Rozprawa jako ciag zdarzen. Stan nie jest nigdzie zapisywany — to wynik zlozenia zdarzen
  * (event sourcing), wiec rozprawe da sie odtworzyc krok po kroku, np. w powtorce na scenie.
  * evolve() pilnuje kolejnosci: zdarzenie nie na swoim miejscu to blad, nie cicha zmiana stanu.
+ * Ksztalt zdarzen sprawdza TrialEventSchema (events.ts), tu sprawdzamy reguly rozprawy.
  */
-export const MAX_DEBATE_ROUNDS = 3;
-
-export type TrialEvent =
-  | {
-      readonly type: "TrialFiled";
-      readonly trialId: string;
-      readonly cvText: string;
-      readonly jobOffer: string;
-      readonly debateRounds: number;
-    }
-  | { readonly type: "AssessmentSubmitted"; readonly assessment: Assessment }
-  | { readonly type: "ProsecutionDelivered"; readonly speech: string }
-  | {
-      readonly type: "StatementMade";
-      readonly round: number;
-      readonly criticId: CriticId;
-      readonly statement: string;
-      readonly revisedScore: number | null;
-    }
-  | {
-      readonly type: "VerdictAnnounced";
-      readonly ruleVersion: number;
-      readonly verdict: Verdict;
-      readonly justification: string;
-    }
-  | { readonly type: "TrialAborted"; readonly reason: string };
-
+export type { TrialEvent } from "./events.js";
 export type Phase = "assessing" | "prosecution" | "debate" | "deliberation" | "closed" | "aborted";
 
 export interface Statement {

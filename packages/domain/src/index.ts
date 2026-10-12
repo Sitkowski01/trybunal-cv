@@ -3,3 +3,4 @@ export * from "./assessment.js";
 export * from "./verdict.js";
 export * from "./trial.js";
 export * from "./diff.js";
+export * from "./events.js";
