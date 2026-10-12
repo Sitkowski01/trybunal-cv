@@ -3,6 +3,7 @@ import {
   InvalidOutputError,
   type LlmClient,
   LlmError,
+  LlmTransportError,
   type ModelId,
   type StructuredRequest,
 } from "@trybunal/llm";
@@ -38,11 +39,14 @@ export class StepFailedError extends Error {
   }
 }
 
+/** Czekanie miedzy probami przy przeciazeniu API: 1 s, 2 s, 4 s... chyba ze API powie inaczej. */
+export const backoffMs = (attempt: number) => 1000 * 2 ** (attempt - 1);
+
 /**
  * Pyta model, az dostanie odpowiedz zgodna ze schematem i regulami, albo skoncza sie proby:
  * - zla odpowiedz (schemat, zmyslony cytat) -> ponowienie z informacja zwrotna dla modelu,
  * - "max_tokens" -> ponowienie z dwa razy wiekszym limitem, odmowa modelu -> koniec,
- * - kazdy inny blad (transport, budzet) -> koniec.
+ * - przeciazenie API (retryable) -> odczekanie i ponowienie, inny blad transportu -> koniec.
  * Kazda proba przechodzi przez klienta (a wiec przez budzet), kazda trafia do rejestru.
  */
 export async function ask<T>(llm: LlmClient, request: StructuredRequest<T>, options: AskOptions<T>): Promise<T> {
@@ -63,11 +67,17 @@ export async function ask<T>(llm: LlmClient, request: StructuredRequest<T>, opti
       if (error instanceof LlmError) {
         const outcome = error instanceof IncompleteOutputError ? "incomplete" : "invalid";
         options.record({ ...base, outcome, costNanoUsd: error.costNanoUsd, durationMs: 0 });
+      } else if (error instanceof LlmTransportError) {
+        options.record({ ...base, outcome: "transport", costNanoUsd: 0, durationMs: 0 });
       }
       if (error instanceof InvalidOutputError) {
         current = { ...current, retry: { previousOutput: error.rawOutput, problems: error.problems } };
       } else if (error instanceof IncompleteOutputError && error.stopReason === "max_tokens") {
         current = { ...current, maxTokens: current.maxTokens * 2 };
+      } else if (error instanceof LlmTransportError && error.retryable) {
+        if (attempt < options.maxAttempts) {
+          await options.sleep(error.retryAfterMs ?? backoffMs(attempt));
+        }
       } else {
         throw error;
       }

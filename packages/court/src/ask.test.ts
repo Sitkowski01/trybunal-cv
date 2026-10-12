@@ -4,11 +4,12 @@ import {
   InvalidOutputError,
   type LlmClient,
   type LlmResult,
+  LlmTransportError,
   type StructuredRequest,
 } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ask, type CallRecord, StepFailedError } from "./ask.js";
+import { ask, backoffMs, type CallRecord, StepFailedError } from "./ask.js";
 
 const Answer = z.object({ score: z.number() });
 const request: StructuredRequest<z.infer<typeof Answer>> = {
@@ -96,22 +97,48 @@ describe("ask", () => {
     expect(calls[0]?.outcome).toBe("incomplete");
   });
 
+  it("przy przeciazeniu API czeka tyle, ile kaze retry-after, a bez niego wykladniczo", async () => {
+    const busy = (after: number | null) => new LlmTransportError("429", true, false, 429, after);
+    const { result, sleeps, calls } = run(scripted(busy(7000), busy(null), ok(2)).llm);
+    expect(await result).toEqual({ score: 2 });
+    expect(sleeps).toEqual([7000, backoffMs(2)]);
+    expect(calls.map((c) => [c.outcome, c.costNanoUsd])).toEqual([
+      ["transport", 0],
+      ["transport", 0],
+      ["ok", 7],
+    ]);
+  });
+
+  it("bledu transportu, ktorego nie warto ponawiac, nie ponawia", async () => {
+    const { llm, requests } = scripted(new LlmTransportError("401", false, false, 401), ok(1));
+    await expect(run(llm).result).rejects.toThrow("401");
+    expect(requests).toHaveLength(1);
+  });
+
   it("nieznany blad (np. budzet) przepuszcza od razu i nie zapisuje proby", async () => {
     const { result, calls } = run(scripted(new Error("budzet"), ok(1)).llm);
     await expect(result).rejects.toThrow("budzet");
     expect(calls).toEqual([]);
   });
 
-  it("po wyczerpaniu prob konczy StepFailedError z ostatnim problemem", async () => {
-    const { result } = run(scripted(invalid("a"), invalid("b"), invalid("c")).llm);
+  it("po wyczerpaniu prob konczy StepFailedError z ostatnim problemem, bez czekania na koniec", async () => {
+    const busy = new LlmTransportError("przeciazenie", true, false, 529);
+    const { result, sleeps } = run(scripted(invalid("a"), invalid("b"), busy).llm);
     const error: unknown = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StepFailedError);
-    expect(error).toMatchObject({ name: "StepFailedError", label: "assessment:hr", attempts: 3 });
-    expect((error as Error).message).toMatch(/^assessment:hr: brak poprawnej odpowiedzi po 3 probach \(Odpowiedz modelu nie spelnia/);
+    expect(error).toMatchObject({ name: "StepFailedError", label: "assessment:hr", attempts: 3, lastProblem: "przeciazenie" });
+    expect((error as Error).message).toBe("assessment:hr: brak poprawnej odpowiedzi po 3 probach (przeciazenie)");
+    expect(sleeps).toEqual([]);
   });
 
   it("problem z walidacji tez trafia do bledu koncowego", async () => {
     const { result } = run(scripted(ok(42), ok(42), ok(42)).llm, () => ["a", "b"]);
     await expect(result).rejects.toMatchObject({ lastProblem: "a; b" });
+  });
+});
+
+describe("backoffMs", () => {
+  it("1 s, 2 s, 4 s", () => {
+    expect([1, 2, 3].map(backoffMs)).toEqual([1000, 2000, 4000]);
   });
 });
