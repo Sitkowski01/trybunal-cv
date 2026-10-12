@@ -7,6 +7,7 @@ import type { TrialHub } from "./hub.js";
 import { type Journal, TrialForgottenError, TrialNotFoundError } from "./journal.js";
 import { pdfToText, UnreadablePdfError } from "./pdf.js";
 import { CourtBusyError, type FileRequest, InvalidTrialError, type TrialService } from "./service.js";
+import { describeIssues } from "./issues.js";
 import { openStream } from "./sse.js";
 
 export interface AppOptions {
@@ -16,7 +17,8 @@ export interface AppOptions {
   /** Wniesienia z jednego IP w oknie czasu — kazda rozprawa kosztuje. */
   readonly rateLimit: { readonly max: number; readonly timeWindowMs: number };
   readonly heartbeatMs?: number;
-  readonly logger?: boolean;
+  /** Dokad pisac logi (JSON, pino); bez strumienia logi sa wylaczone. */
+  readonly logStream?: { write(line: string): void };
   /** Za proxy (Docker, nginx): adres klienta z X-Forwarded-For, inaczej wszyscy dziela jeden limit. */
   readonly trustProxy?: boolean;
 }
@@ -34,17 +36,9 @@ const TrialParams = z.object({ id: z.string().min(1).max(100) });
 // Gorna granica jak kolumna integer w Postgresie — wieksza liczba to blad bazy (500), a nie 400.
 const AfterSeq = z.coerce.number().int().min(0).max(2_147_483_647);
 
-class BadRequestError extends Error {
-  constructor(readonly problems: readonly string[]) {
-    super(problems.join("; "));
-  }
-}
-
-const issues = (error: z.ZodError) => error.issues.map((i) => `${i.path.map(String).join(".") || "(calosc)"}: ${i.message}`);
-
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
-  if (!result.success) throw new BadRequestError(issues(result.error));
+  if (!result.success) throw new InvalidTrialError(describeIssues(result.error.issues));
   return result.data;
 }
 
@@ -53,7 +47,10 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     trustProxy: options.trustProxy ?? false,
     // Id rozprawy to jedyny klucz do jej odczytu i usuniecia — nie moze lezec w logach.
-    logger: options.logger === true && { serializers: { req: (req: { method: string; url: string }) => ({ method: req.method, url: redactIds(req.url) }) } },
+    logger: options.logStream !== undefined && {
+      stream: options.logStream,
+      serializers: { req: (req: { method: string; url: string }) => ({ method: req.method, url: redactIds(req.url) }) },
+    },
   });
   // Lekki limit dla wszystkich tras (strumienie SSE kosztuja gniazdo i odczyt z bazy), ostry dla wniesien.
   await app.register(rateLimit, { max: 120, timeWindow: 60_000 });
@@ -134,12 +131,12 @@ async function readMultipart(parts: AsyncIterableIterator<import("@fastify/multi
   const fields: Record<string, unknown> = {};
   for await (const part of parts) {
     if (part.type === "file") {
-      if (part.fieldname !== "cv") throw new BadRequestError([`${part.fieldname}: nieoczekiwany plik, CV wysylamy w polu "cv"`]);
+      if (part.fieldname !== "cv") throw new InvalidTrialError([`${part.fieldname}: nieoczekiwany plik, CV wysylamy w polu "cv"`]);
       const bytes = await part.toBuffer();
-      if ("cvText" in fields) throw new BadRequestError(["cv: CV jako plik albo tekst, nie oba naraz"]);
+      if ("cvText" in fields) throw new InvalidTrialError(["cv: CV jako plik albo tekst, nie oba naraz"]);
       fields.cvText = await pdfToText(new Uint8Array(bytes));
     } else {
-      if (part.fieldname === "cvText" && "cvText" in fields) throw new BadRequestError(["cv: CV jako plik albo tekst, nie oba naraz"]);
+      if (part.fieldname === "cvText" && "cvText" in fields) throw new InvalidTrialError(["cv: CV jako plik albo tekst, nie oba naraz"]);
       fields[part.fieldname] = part.value;
     }
   }
@@ -149,7 +146,7 @@ async function readMultipart(parts: AsyncIterableIterator<import("@fastify/multi
 export const redactIds = (url: string) => url.replace(/\/trials\/[^/?]+/u, "/trials/:id");
 
 function sendError(reply: FastifyReply, error: unknown) {
-  if (error instanceof BadRequestError || error instanceof InvalidTrialError) {
+  if (error instanceof InvalidTrialError) {
     return reply.code(400).send({ error: "Niepoprawne dane", problems: error.problems });
   }
   if (error instanceof UnreadablePdfError) return reply.code(422).send({ error: error.message });

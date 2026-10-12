@@ -53,7 +53,7 @@ const app = await buildApp({
   journal,
   hub,
   rateLimit: { max: config.RATE_LIMIT_PER_HOUR, timeWindowMs: 3_600_000 },
-  logger: true,
+  logStream: process.stdout,
   trustProxy: config.TRUST_PROXY,
 });
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { describeIssues } from "./issues.js";
 
 /**
  * Konfiguracja serwera ze zmiennych srodowiska, sprawdzona przy starcie — zla wartosc zatrzymuje
@@ -41,10 +42,10 @@ export type ServerConfig = z.infer<typeof EnvSchema>;
 
 export function readConfig(env: Readonly<Record<string, string | undefined>>): ServerConfig {
   // Pusta zmienna (np. "DATABASE_URL=" w .env) traktowana jak brak.
-  const present = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v !== ""));
+  const present = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== ""));
   const result = EnvSchema.safeParse(present);
   if (!result.success) {
-    const problems = result.error.issues.map((i) => `${i.path.map(String).join(".")}: ${i.message}`);
+    const problems = describeIssues(result.error.issues);
     throw new Error(`Bledna konfiguracja serwera:\n  ${problems.join("\n  ")}`);
   }
   return result.data;

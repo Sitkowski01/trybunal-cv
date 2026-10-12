@@ -5,6 +5,7 @@ import { BudgetedLlmClient, type LlmClient } from "@trybunal/llm";
 import type { TrialHub } from "./hub.js";
 import type { Journal } from "./journal.js";
 import { type Anonymized, anonymize } from "./pii.js";
+import { describeIssues } from "./issues.js";
 
 export interface FileRequest {
   readonly cvText: string;
@@ -96,7 +97,7 @@ export class TrialService {
     const input = { trialId, cvText: cv.text, jobOffer: offer.text, debateRounds: request.debateRounds };
     const parsed = TrialEventSchema.safeParse({ type: "TrialFiled", ...input });
     if (!parsed.success) {
-      throw new InvalidTrialError(parsed.error.issues.map((i) => `${i.path.map(String).join(".")}: ${i.message}`));
+      throw new InvalidTrialError(describeIssues(parsed.error.issues));
     }
     this.reserveSlot();
     let filed: Promise<void>;
