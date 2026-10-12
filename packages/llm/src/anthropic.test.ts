@@ -114,7 +114,10 @@ describe("AnthropicLlmClient — odpowiedz", () => {
     await expect(new AnthropicLlmClient(api).generate(request)).rejects.toBeInstanceOf(InvalidOutputError);
   });
 
-  it("fromApiKey buduje klienta bez wysylania czegokolwiek", () => {
-    expect(AnthropicLlmClient.fromApiKey("sk-test")).toBeInstanceOf(AnthropicLlmClient);
+  it("fromApiKey ustawia klucz, 2 ponowienia i timeout 120 s w kliencie SDK", () => {
+    const llm = AnthropicLlmClient.fromApiKey("sk-test");
+    // Zagladamy do SDK: messages trzyma klienta, ktory przechowuje opcje.
+    const sdk = (llm as unknown as { messages: { _client: Record<string, unknown> } }).messages._client;
+    expect(sdk).toMatchObject({ apiKey: "sk-test", maxRetries: 2, timeout: 120_000 });
   });
 });

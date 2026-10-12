@@ -55,6 +55,11 @@ describe("CassetteSchema", () => {
     const entry = { label: "hr", model: "claude-haiku-5-5", data: {}, usage: FAKE_USAGE, costNanoUsd: 1, ...change };
     expect(CassetteSchema.safeParse([entry]).success).toBe(false);
   });
+
+  it("mowi, ze model jest nieznany", () => {
+    const entry = { label: "hr", model: "gpt-9", data: {}, usage: FAKE_USAGE, costNanoUsd: 1 };
+    expect(CassetteSchema.safeParse([entry]).error?.issues[0]?.message).toBe("Nieznany model");
+  });
 });
 
 describe("ReplayLlmClient", () => {

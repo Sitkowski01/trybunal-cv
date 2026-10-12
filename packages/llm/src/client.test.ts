@@ -26,6 +26,13 @@ describe("parseOutput", () => {
     expect((error as Error).message).toContain("Odpowiedz modelu nie spelnia schematu: score:");
   });
 
+  it("sciezka zagniezdzonego pola po kropkach, problemy w komunikacie po sredniku", () => {
+    const Nested = z.object({ a: z.object({ b: z.number(), c: z.number() }) });
+    const error = catchError(() => parseOutput('{"a":{"b":"x","c":"y"}}', Nested, "claude-haiku-5-5", USAGE)) as InvalidOutputError;
+    expect(error.problems.map((p) => p.split(":")[0])).toEqual(["a.b", "a.c"]);
+    expect(error.message).toMatch(/^Odpowiedz modelu nie spelnia schematu: a\.b: .+; a\.c: .+$/);
+  });
+
   it("blad calego obiektu ma czytelna sciezke", () => {
     const error = catchError(() => parseOutput("[]", Answer, "claude-haiku-5-5", USAGE)) as InvalidOutputError;
     expect(error.problems[0]).toMatch(/^\(calosc\): /);

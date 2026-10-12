@@ -45,6 +45,7 @@ describe("BudgetedLlmClient", () => {
     const llm = new BudgetedLlmClient(inner, worst - 1);
     const error: unknown = await llm.generate(request).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(BudgetExceededError);
+    expect((error as Error).name).toBe("BudgetExceededError");
     expect(error).toMatchObject({ spentNanoUsd: 0, reservedNanoUsd: 0, neededNanoUsd: worst, limitNanoUsd: worst - 1 });
     expect((error as Error).message).toMatch(/^Budzet \$0\.\d{4}: wydano \$0\.0000, zarezerwowano \$0\.0000, zapytanie moze kosztowac do \$0\.\d{4}$/);
     expect(inner.calls).toEqual([]);
