@@ -51,8 +51,9 @@ describe("pdfToText", () => {
   });
 
   it(`odrzuca wiecej niz ${String(MAX_PDF_PAGES)} stron, przyjmuje dokladnie tyle`, async () => {
-    await expect(pdfToText(await pdf(Array<string>(MAX_PDF_PAGES + 1).fill("x")))).rejects.toThrow(
-      `CV ma ${String(MAX_PDF_PAGES + 1)} stron, limit to ${String(MAX_PDF_PAGES)}`,
+    // Dokladny komunikat: nasz blad nie moze zostac opakowany w "Nie mozna odczytac PDF".
+    await expect(pdfToText(await pdf(Array<string>(MAX_PDF_PAGES + 1).fill("x")))).rejects.toEqual(
+      new UnreadablePdfError(`CV ma ${String(MAX_PDF_PAGES + 1)} stron, limit to ${String(MAX_PDF_PAGES)}`),
     );
     await expect(pdfToText(await pdf(Array<string>(MAX_PDF_PAGES).fill("x")))).resolves.toContain("x");
   });

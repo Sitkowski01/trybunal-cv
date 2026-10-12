@@ -39,3 +39,13 @@ describe("readConfig", () => {
     expect(toNanoUsd(0.1 + 0.2)).toBe(300_000_000);
   });
 });
+
+describe("readConfig — granice", () => {
+  it("bez wskazania proba generalna jest wylaczona; budzet rozprawy rowny dziennemu jest dozwolony", () => {
+    expect(readConfig({ ANTHROPIC_API_KEY: "sk", TRIAL_BUDGET_USD: "5", DAILY_BUDGET_USD: "5" })).toMatchObject({ TRYBUNAL_REHEARSAL: false, TRIAL_BUDGET_USD: 5 });
+  });
+
+  it("kazdy problem w osobnej linii", () => {
+    expect(() => readConfig({ PORT: "x", DAILY_BUDGET_USD: "-1" })).toThrow(/^Bledna konfiguracja serwera:\n {2}PORT: [^\n]+\n {2}DAILY_BUDGET_USD: [^\n]+$/u);
+  });
+});

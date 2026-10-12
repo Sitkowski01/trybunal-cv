@@ -164,6 +164,13 @@ describe("TrialService — limity", () => {
     await service.close();
   });
 
+  it("rezerwacja dokladnie rowna budzetowi dnia jeszcze przechodzi", async () => {
+    const { service } = setup({ llm: () => hanging, trialBudgetNanoUsd: 5 * USD, dailyBudgetNanoUsd: 10 * USD });
+    await service.file(request);
+    await expect(service.file(request)).resolves.toMatchObject({ trialId: "t-2" });
+    await service.close();
+  });
+
   it("liczy tylko wydatki od polnocy UTC", async () => {
     const { service, journal } = setup({ trialBudgetNanoUsd: 6 * USD, now: () => new Date("2026-10-12T23:59:00Z") });
     const since: Date[] = [];
@@ -202,12 +209,19 @@ describe("TrialService — anulowanie, zapomnienie, awarie", () => {
   });
 
   it("awaria zapisu: rozprawa anulowana, blad zgloszony raz, dalsze zdarzenia nie ida do sluchaczy", async () => {
-    const { service, journal, hub, errors } = setup();
+    // Licznik wszystkiego, za co model "wystawil rachunek" — porownamy z tym, co trafilo do dziennika.
+    let paid = 0;
+    const counting = (): LlmClient => {
+      const inner = rehearsalLlm();
+      return { generate: (req, signal) => inner.generate(req, signal).then((r) => { paid += r.costNanoUsd; return r; }) };
+    };
+    const { service, journal, hub, errors } = setup({ llm: counting });
     const append = journal.append.bind(journal);
-    let lost = 0;
+    let stored = 0;
     journal.append = (id, seq, event, calls) => {
-      if (seq >= 3) lost += calls.reduce((sum, c) => sum + c.costNanoUsd, 0);
-      return seq === 3 ? Promise.reject(new Error("baza padla")) : append(id, seq, event, calls);
+      if (seq === 3) return Promise.reject(new Error("baza padla"));
+      stored += calls.reduce((sum, c) => sum + c.costNanoUsd, 0);
+      return append(id, seq, event, calls);
     };
     const heard: number[] = [];
     hub.subscribe("t-1", (e) => heard.push(e.seq));
@@ -215,9 +229,9 @@ describe("TrialService — anulowanie, zapomnienie, awarie", () => {
     await service.settled("t-1");
     expect(errors[0]).toEqual(new Error("baza padla"));
     // Koszt zdarzen po awarii nie trafil do dziennika ani budzetu dnia — przynajmniej jest w logach.
-    // Wiecej niz koszt zdarzenia, ktorego zapis padl: doliczone sa tez pominiete pozniej.
-    const logged = Number(/: (\d+) nano-USD$/u.exec((errors[1] as Error).message)?.[1]);
-    expect(logged).toBeGreaterThan(lost);
+    // Zdarzenie, ktorego zapis padl, i wszystkie pominiete pozniej: razem z zapisanymi = caly rachunek.
+    expect(errors[1]).toEqual(new Error(`Niezapisany koszt rozprawy po awarii zapisu: ${String(paid - stored)} nano-USD`));
+    expect(paid - stored).toBeGreaterThan(0);
     expect(errors).toHaveLength(2);
     expect(heard).toEqual([1, 2]);
     expect(service.isRunning("t-1")).toBe(false);

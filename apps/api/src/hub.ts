@@ -41,6 +41,11 @@ export class TrialHub {
     });
   }
 
+  /** Ile rozpraw ma sluchaczy — do testow sprzatania (brak wycieku pamieci). */
+  get activeTrials(): number {
+    return this.listeners.size;
+  }
+
   /** Ilu sluchaczy ma rozprawa — do testow sprzatania po rozlaczeniu. */
   listenerCount(trialId: string): number {
     return this.listeners.get(trialId)?.size ?? 0;

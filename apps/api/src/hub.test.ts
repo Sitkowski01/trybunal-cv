@@ -28,6 +28,8 @@ describe("TrialHub", () => {
     expect([heard, hub.listenerCount("t")]).toEqual([["2"], 1]);
     second();
     expect(hub.listenerCount("t")).toBe(0);
+    // Ostatni wypisany sprzata wpis rozprawy — dlugo dzialajacy serwer nie trzyma pustych zbiorow.
+    expect(hub.activeTrials).toBe(0);
   });
 
   it("sluchacz wypisujacy sie w trakcie rozglaszania nie gubi pozostalych", () => {

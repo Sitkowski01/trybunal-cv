@@ -1,6 +1,6 @@
 import type { LlmClient } from "@trybunal/llm";
 import type { FastifyInstance } from "fastify";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
@@ -68,7 +68,12 @@ describe("GET /trials/:id/events", () => {
     await app.inject({ method: "POST", url: "/trials", payload: body });
     await service.settled("t-1");
     const res = await app.inject({ url: "/trials/t-1/events" });
-    expect(res.headers["content-type"]).toBe("text/event-stream; charset=utf-8");
+    expect(res.headers).toMatchObject({
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    });
     expect(frames(res.body)).toEqual([...Array.from({ length: 13 }, (_, i) => i + 1), formatEnd("finished").trim()]);
   });
 
@@ -144,7 +149,7 @@ describe("openStream — szczelina miedzy odczytem a subskrypcja", () => {
     const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
     const request = { destroyed: false };
     write(request as never, response as never);
-    hub.publish(env(4));
+    // 4 przyszlo tylko w czasie odczytu (bufor) — musi wyjsc z bufora, na zywo juz nie przyjdzie.
     hub.publish(env(5, true));
     hub.publish(env(6));
     expect(frames(written.join(""))).toEqual([2, 3, 4, 5, formatEnd("finished").trim()]);
@@ -190,5 +195,26 @@ describe("strumien — prywatnosc i koniec bez werdyktu", () => {
     const response = { destroyed: false, writeHead: () => { throw new Error("nie powinno pisac"); } };
     write({ destroyed: true } as never, response as never);
     expect(hub.listenerCount("t")).toBe(0);
+  });
+});
+
+describe("strumien — puls", () => {
+  it("puls w ciszy, a po koncu strumienia juz nic nie jest pisane", async () => {
+    vi.useFakeTimers();
+    try {
+      const hub = new TrialHub();
+      const journal = { read: () => Promise.resolve([]) } as unknown as Journal;
+      const write = await openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 100 });
+      const written: string[] = [];
+      const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
+      write({ destroyed: false } as never, response as never);
+      vi.advanceTimersByTime(250);
+      expect(written).toEqual([": ping\n\n", ": ping\n\n"]);
+      hub.stop("t");
+      vi.advanceTimersByTime(1000);
+      expect(written).toEqual([": ping\n\n", ": ping\n\n", formatEnd("interrupted")]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
