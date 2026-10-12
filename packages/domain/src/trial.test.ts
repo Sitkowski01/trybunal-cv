@@ -25,7 +25,6 @@ const filed = (debateRounds = 1): TrialEvent => ({
 const assessment = (criticId: CriticId, score = 6): Assessment => ({
   criticId,
   score,
-  recommendation: score >= 6 ? "invite" : "reject",
   summary: `Ocena ${criticId}`,
   strengths: [],
   concerns: [],

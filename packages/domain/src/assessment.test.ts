@@ -5,7 +5,6 @@ import { type Assessment, AssessmentSchema, findInventedQuotes, ScoreSchema } fr
 const valid: Assessment = {
   criticId: "techLead",
   score: 6,
-  recommendation: "invite",
   summary: "Solidny backend, slabo udokumentowany frontend.",
   strengths: ["Projekt gieldy z testami mutacyjnymi"],
   concerns: [{ quote: "Ekspert React", issue: "brak projektu w React", severity: "high" }],
@@ -35,24 +34,26 @@ describe("AssessmentSchema", () => {
     ["ocena 0", { score: 0 }],
     ["ocena 11", { score: 11 }],
     ["ocena ulamkowa", { score: 6.5 }],
-    ["nieznana rekomendacja", { recommendation: "maybe" }],
+    ["cytat krotszy niz 3 znaki", { concerns: [{ quote: "AI", issue: "b", severity: "low" }] }],
+    ["cytat bez liter", { concerns: [{ quote: "2020 - 2024", issue: "b", severity: "low" }] }],
+    ["poprawiany fragment bez liter", { rewrites: [{ original: "...", proposed: "x", reason: "r" }] }],
     ["puste podsumowanie", { summary: "   " }],
     ["za dlugie podsumowanie", { summary: "x".repeat(1001) }],
     ["szesc mocnych stron", { strengths: Array.from({ length: 6 }, () => "x") }],
     ["pusta mocna strona", { strengths: [""] }],
-    ["nieznana waga zastrzezenia", { concerns: [{ quote: "a", issue: "b", severity: "x" }] }],
+    ["nieznana waga zastrzezenia", { concerns: [{ quote: "Java", issue: "b", severity: "x" }] }],
     ["zastrzezenie bez cytatu", { concerns: [{ quote: "", issue: "b", severity: "low" }] }],
-    ["poprawka bez zmian", { rewrites: [{ original: "a", proposed: "a", reason: "r" }] }],
+    ["poprawka bez zmian", { rewrites: [{ original: "Java", proposed: "Java", reason: "r" }] }],
   ])("odrzuca: %s", (_, overrides) => {
     expect(parse(overrides)).toBe(false);
   });
 
   it.each(["low", "medium", "high"])("przyjmuje wage zastrzezenia %s", (severity) => {
-    expect(parse({ concerns: [{ quote: "a", issue: "b", severity }] })).toBe(true);
+    expect(parse({ concerns: [{ quote: "Java", issue: "b", severity }] })).toBe(true);
   });
 
   it("mowi, dlaczego poprawka jest odrzucona", () => {
-    const result = AssessmentSchema.safeParse({ ...valid, rewrites: [{ original: "a", proposed: "a", reason: "r" }] });
+    const result = AssessmentSchema.safeParse({ ...valid, rewrites: [{ original: "Java", proposed: "Java", reason: "r" }] });
     expect(result.error?.issues[0]?.message).toBe("Poprawka niczego nie zmienia");
   });
 
@@ -102,6 +103,24 @@ describe("findInventedQuotes", () => {
     expect(findInventedQuotes(quoting("STRASSE"), "Mieszkam przy Straße")).toEqual(["STRASSE"]);
   });
 
+  const char = (code: number) => String.fromCodePoint(code);
+
+  it("polskie litery rozlozone na znak i ogonek (NFD, czesto z PDF) pasuja do zlozonych", () => {
+    const pdf = "Zarządzałem zespołem".normalize("NFD");
+    expect(findInventedQuotes(quoting("zarządzałem zespołem"), pdf)).toEqual([]);
+  });
+
+  it("miekki lacznik i znak zerowej szerokosci z PDF nie psuja cytatu", () => {
+    const pdf = `Odpowie${char(0xad)}dzialny za wdro${char(0x200b)}zenie`;
+    expect(findInventedQuotes(quoting("odpowiedzialny za wdrozenie"), pdf)).toEqual([]);
+  });
+
+  it("typograficzne cudzyslowy i myslniki to te same znaki co proste", () => {
+    const cv = `Projekt ${char(0x201e)}Parkiet${char(0x201d)} ${char(0x2013)} gielda`;
+    expect(findInventedQuotes(quoting('Projekt "Parkiet" - gielda'), cv)).toEqual([]);
+    expect(findInventedQuotes(quoting(`Projekt ${char(0x2018)}Parkiet${char(0x2019)}`), "Projekt 'Parkiet'")).toEqual([]);
+  });
+
   it("zglasza zmyslony cytat zastrzezenia i zmyslony fragment poprawki", () => {
     const invented: Assessment = {
       ...valid,
@@ -111,11 +130,14 @@ describe("findInventedQuotes", () => {
     expect(findInventedQuotes(invented, cv)).toEqual(["10 lat w Google", "Kierowalem zespolem"]);
   });
 
-  it("cytat bedacy fragmentem CV zawsze jest uznany", () => {
+  it("cytat bedacy fragmentem CV zawsze jest uznany, takze poza ASCII", () => {
+    // Model cytuje cale znaki, wiec tniemy po grafemach, nie po jednostkach UTF-16.
+    const segmenter = new Intl.Segmenter("pl", { granularity: "grapheme" });
     fc.assert(
-      fc.property(fc.string({ minLength: 1 }), fc.nat(), fc.nat(), (text, a, b) => {
-        const start = a % text.length;
-        const quote = text.slice(start, start + 1 + (b % (text.length - start)));
+      fc.property(fc.string({ minLength: 1, unit: "grapheme" }), fc.nat(), fc.nat(), (text, a, b) => {
+        const graphemes = [...segmenter.segment(text)].map((s) => s.segment);
+        const start = a % graphemes.length;
+        const quote = graphemes.slice(start, start + 1 + (b % (graphemes.length - start))).join("");
         fc.pre(quote.trim().length > 0);
         const assessment = { ...valid, concerns: [{ quote, issue: "x", severity: "low" as const }], rewrites: [] };
         return findInventedQuotes(assessment, text).length === 0;
