@@ -17,11 +17,7 @@ interface Rule {
   readonly kind: PiiKind;
   readonly pattern: RegExp;
   readonly replacement: string;
-  /** Dodatkowy warunek na dopasowanie, ktorego nie da sie wygodnie wyrazic wyrazeniem. */
-  readonly accept?: (match: string) => boolean;
 }
-
-const digits = (s: string) => s.replace(/\D/g, "").length;
 
 const RULES: readonly Rule[] = [
   { kind: "email", pattern: /[\p{L}\d._%+-]+@[\p{L}\d-]+(?:\.[\p{L}\d-]+)*\.\p{L}{2,}/gu, replacement: "[EMAIL]" },
@@ -40,10 +36,12 @@ const RULES: readonly Rule[] = [
   { kind: "pesel", pattern: /(?<!\d)\d{11}(?!\d)/gu, replacement: "[PESEL]" },
   {
     kind: "phone",
-    pattern: /(?<![\d\w(])(?:\+|00)?\(?\d[\d ()-]{7,16}\d(?![\d\w])/gu,
+    // Konkretne formaty zamiast "ciag cyfr i odstepow": zachlanny ciag polykal sasiedni kod pocztowy
+    // ("601 234 567 00-950"), byl odrzucany jako za dlugi i numer zostawal w tekscie.
+    // Polskie: komorkowy 3-3-3, stacjonarny (22) 123 45 67; z +48/0048. Inne kraje: + i grupy cyfr z odstepami.
+    pattern:
+      /(?<![\d\w+])(?:(?:(?:\+|00)\d{2}[ -]?)?(?:\(\d{2}\)[ -]?\d{3}[ -]?\d{2}[ -]?\d{2}|\d{2}[ -]?\d{3}[ -]?\d{2}[ -]?\d{2}|\d{3}[ -]?\d{3}[ -]?\d{3})|\+\d{1,3}(?:[ -]\d{2,4}){2,4})(?![\d\w])/gu,
     replacement: "[TELEFON]",
-    // 9 cyfr (PL) do 13 (z kodem kraju po 00); zakres lat "2019 - 2023" ma 8 cyfr i nie przejdzie.
-    accept: (m) => digits(m) >= 9 && digits(m) <= 13 && !/\d[./]\d/u.test(m),
   },
   { kind: "postalCode", pattern: /(?<!\d)\d{2}-\d{3}(?!\d)/gu, replacement: "[KOD POCZTOWY]" },
   {
@@ -71,10 +69,7 @@ export function anonymize(text: string, candidateName?: string): Anonymized {
   const name = candidateName === undefined ? null : nameRule(candidateName.trim());
   let result = text;
   for (const rule of name === null ? RULES : [...RULES, name]) {
-    result = result.replace(rule.pattern, (match) => {
-      if (rule.accept !== undefined && !rule.accept(match)) {
-        return match;
-      }
+    result = result.replace(rule.pattern, () => {
       found[rule.kind] = (found[rule.kind] ?? 0) + 1;
       return rule.replacement;
     });

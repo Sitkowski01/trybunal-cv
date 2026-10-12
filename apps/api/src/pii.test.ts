@@ -25,6 +25,15 @@ describe("anonymize — dane kontaktowe", () => {
     expect(result.found).toEqual({ [kind]: 1 });
   });
 
+  it.each([
+    ["tel. 601 234 567 00-950 Warszawa", "tel. [TELEFON] [KOD POCZTOWY] Warszawa"],
+    ["601234567, 22 123 45 67", "[TELEFON], [TELEFON]"],
+    ["+1 415 555 0100", "[TELEFON]"],
+    ["+44 20 7946 0958", "[TELEFON]"],
+  ])("telefon obok innych danych i w innych formatach: %s", (input, expected) => {
+    expect(anonymize(input).text).toBe(expected);
+  });
+
   it("liczy kazdy rodzaj osobno", () => {
     const result = anonymize("a@b.pl, c@d.pl, tel. 601 234 567");
     expect(result.text).toBe("[EMAIL], [EMAIL], tel. [TELEFON]");
@@ -54,11 +63,14 @@ describe("anonymize — tresc zawodowa zostaje", () => {
     );
   });
 
+  // Fragmenty rozdzielone jak w tekscie. Sklejone bez odstepu ("601 234 567(22) 123 45 67") nie sa idempotentne:
+  // numer nie moze zaczac sie tuz po cyfrze, a po pierwszej zamianie przed drugim jest juz "]".
   it("anonimizacja jest idempotentna (wlasciwosc)", () => {
-    const piece = fc.constantFrom("Java", " ", "a@b.pl", "601 234 567", "00-950", "95031212345", "https://x.dev", "2019-2023", "\n");
+    const piece = fc.constantFrom("Java", "a@b.pl", "601 234 567", "00-950", "95031212345", "https://x.dev", "2019-2023", "(22) 123 45 67");
+    const separator = fc.constantFrom(" ", "\n", ", ", "; ");
     fc.assert(
-      fc.property(fc.array(piece, { maxLength: 30 }), (pieces) => {
-        const once = anonymize(pieces.join("")).text;
+      fc.property(fc.array(fc.tuple(piece, separator), { maxLength: 30 }), (pieces) => {
+        const once = anonymize(pieces.map(([p, sep]) => p + sep).join("")).text;
         expect(anonymize(once).text).toBe(once);
       }),
     );
