@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { costNanoUsd, isModelId, MODELS, type TokenUsage } from "./pricing.js";
+import { costNanoUsd, formatUsd, isModelId, MODELS, type TokenUsage } from "./pricing.js";
 
 const usage = (input: number, output: number, cacheWrite = 0, cacheRead = 0): TokenUsage => ({
   inputTokens: input,
@@ -58,5 +58,18 @@ describe("isModelId", () => {
     expect(isModelId("claude-haiku-5-5")).toBe(true);
     expect(isModelId("claude-sonnet-4")).toBe(false);
     expect(isModelId("toString")).toBe(false);
+  });
+});
+
+describe("formatUsd", () => {
+  it.each([
+    [0, "$0.0000"],
+    [100_000, "$0.0001"],
+    [1, "$0.0001"],
+    [123_456_789, "$0.1235"],
+    [2_000_000_000, "$2.0000"],
+    [12_345_000_000, "$12.3450"],
+  ])("%d n$ -> %s", (nano, text) => {
+    expect(formatUsd(nano)).toBe(text);
   });
 });

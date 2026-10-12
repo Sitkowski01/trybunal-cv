@@ -58,3 +58,11 @@ export function costNanoUsd(model: ModelId, usage: TokenUsage): number {
     usage.outputTokens * r.output
   );
 }
+
+/** Do wyswietlania: 1 234 567 n$ -> "$0.0012" (zaokraglenie w gore, zeby nie zanizac kosztu). */
+export function formatUsd(nanoUsd: number): string {
+  const tenThousandths = Math.ceil(nanoUsd / 100_000);
+  const dollars = Math.floor(tenThousandths / 10_000);
+  const rest = String(tenThousandths % 10_000).padStart(4, "0");
+  return `$${String(dollars)}.${rest}`;
+}
