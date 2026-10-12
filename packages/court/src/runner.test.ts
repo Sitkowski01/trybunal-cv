@@ -104,6 +104,13 @@ describe("runTrial — przebieg", () => {
     expect(seen.flatMap(([, c]) => c)).toHaveLength(run.calls.length);
   });
 
+  it("wniesienie zgloszone synchronicznie, zanim runTrial odda obietnice", () => {
+    const seen: string[] = [];
+    const run = runTrial(input, { llm: new FakeLlmClient(happy), onEvent: (e) => seen.push(e.type) });
+    expect(seen).toEqual(["TrialFiled"]);
+    return run;
+  });
+
   it("wyjatek obserwatora (np. zerwany strumien) nie przerywa rozprawy i trafia do onObserverError", async () => {
     const errors: unknown[] = [];
     const run = await runTrial(input, {

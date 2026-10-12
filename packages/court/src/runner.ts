@@ -44,6 +44,8 @@ export interface RunOptions {
   /**
    * Kazde zdarzenie zaraz po zastosowaniu — tu podlaczy sie API (SSE) i scena. calls: proby zapytan,
    * ktore wyprodukowaly to zdarzenie (tokeny, koszt); kazda proba trafia do dokladnie jednego zdarzenia.
+   * Gwarancja: TrialFiled przychodzi synchronicznie, zanim runTrial odda obietnice — API na tym
+   * opiera odpowiedz 202 dopiero po zapisie wniesienia.
    */
   readonly onEvent?: (event: TrialEvent, state: TrialState, calls: readonly CallRecord[]) => void;
   /** Blad obserwatora (np. zerwany strumien SSE) nie przerywa rozprawy — trafia tutaj. */
