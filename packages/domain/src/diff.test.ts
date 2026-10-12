@@ -84,9 +84,22 @@ describe("wordDiff", () => {
     ]);
   });
 
-  it("na granicy limitu dalej liczy roznice", () => {
-    const words = Array.from({ length: MAX_DIFF_TOKENS / 2 }, () => "a").join(" ");
-    expect(wordDiff(words, words)).toEqual([{ kind: "same", text: words }]);
+  // Druga strona to jedno slowo: tablica LCS ma 2001 x 2 pola zamiast 4 mln — pod instrumentacja
+  // Strykera pelna tablica 2000 x 2000 przekraczala limit czasu testu.
+  it("na granicy limitu dalej liczy roznice, tuz za nia juz nie", () => {
+    const atLimit = "slowo ".repeat(MAX_DIFF_TOKENS / 2);
+    expect(wordDiff(atLimit, "slowo")[0]).toEqual({ kind: "same", text: "slowo" });
+    const overLimit = `${atLimit}x`;
+    expect(wordDiff(overLimit, "slowo")).toEqual([
+      { kind: "removed", text: overLimit },
+      { kind: "added", text: "slowo" },
+    ]);
+    // To samo, gdy dlugi jest tekst po poprawce.
+    expect(wordDiff("slowo", atLimit)[0]).toEqual({ kind: "same", text: "slowo" });
+    expect(wordDiff("slowo", overLimit)).toEqual([
+      { kind: "removed", text: "slowo" },
+      { kind: "added", text: overLimit },
+    ]);
   });
 
   it("zachowuje najdluzsza wspolna czesc, nie pierwsze dopasowanie", () => {
