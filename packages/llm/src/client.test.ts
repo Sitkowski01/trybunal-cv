@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { IncompleteOutputError, InvalidOutputError, LlmError, parseOutput } from "./client.js";
+import { IncompleteOutputError, InvalidOutputError, LlmError, LlmTransportError, parseOutput } from "./client.js";
 import { costNanoUsd } from "./pricing.js";
 
 const USAGE = { inputTokens: 1000, outputTokens: 200, cacheWriteTokens: 0, cacheReadTokens: 0 };
@@ -19,11 +19,20 @@ describe("parseOutput", () => {
 
   it("naruszenie schematu wymienia pola, ktore sa zle", () => {
     const error = catchError(() => parseOutput('{"score":11,"note":""}', Answer, "claude-haiku-5-5", USAGE));
-    expect((error as InvalidOutputError).problems).toEqual([
-      "score: Too big: expected number to be <=10",
-      "note: Too small: expected string to have >=1 characters",
-    ]);
+    // Tresc komunikatow pochodzi z zod; sprawdzamy, ktorych pol dotycza.
+    expect((error as InvalidOutputError).problems.map((p) => p.split(":")[0])).toEqual(["score", "note"]);
     expect((error as Error).message).toContain("Odpowiedz modelu nie spelnia schematu: score:");
+  });
+
+  it("brak odpowiedzi to LlmTransportError: bez kodu i retry-after, gdy ich nie ma", () => {
+    expect(new LlmTransportError("timeout", true, true)).toMatchObject({
+      name: "LlmTransportError",
+      message: "timeout",
+      retryable: true,
+      mayHaveBeenBilled: true,
+      status: null,
+      retryAfterMs: null,
+    });
   });
 
   it("sciezka zagniezdzonego pola po kropkach, problemy w komunikacie po sredniku", () => {

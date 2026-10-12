@@ -1,8 +1,9 @@
+import Anthropic from "@anthropic-ai/sdk";
 import type { Message, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { AnthropicLlmClient, type MessagesApi } from "./anthropic.js";
-import { IncompleteOutputError, InvalidOutputError, type StructuredRequest } from "./client.js";
+import { AnthropicLlmClient, type MessagesApi, sdkOptions, toTransportError } from "./anthropic.js";
+import { IncompleteOutputError, InvalidOutputError, LlmTransportError, type StructuredRequest } from "./client.js";
 import { costNanoUsd } from "./pricing.js";
 
 const Answer = z.object({ score: z.number().int().min(1).max(10) });
@@ -24,14 +25,15 @@ interface Reply {
 }
 
 /** Podstawione API: zapamietuje zapytanie i zwraca przygotowana odpowiedz. */
-function fakeApi(reply: Reply) {
+function fakeApi(reply: Reply | Error = {}) {
   const sent: { body: MessageCreateParamsNonStreaming; options: unknown }[] = [];
   const api: MessagesApi = {
     create(body, options) {
       sent.push({ body, options });
+      if (reply instanceof Error) return Promise.reject(reply);
       const message = {
         content: reply.content ?? [{ type: "text", text: '{"score":7}', citations: null }],
-        stop_reason: reply.stop_reason ?? "end_turn",
+        stop_reason: reply.stop_reason === undefined ? "end_turn" : reply.stop_reason,
         usage: { input_tokens: 300, output_tokens: 40, cache_creation_input_tokens: 0, cache_read_input_tokens: 2000, ...reply.usage },
       };
       return Promise.resolve(message as unknown as Message);
@@ -98,26 +100,75 @@ describe("AnthropicLlmClient — odpowiedz", () => {
     expect((await new AnthropicLlmClient(api).generate(request)).data).toEqual({ score: 3 });
   });
 
-  it.each(["max_tokens", "refusal", "model_context_window_exceeded"] as const)(
-    "odpowiedz przerwana przez %s to IncompleteOutputError z kosztem",
+  it.each(["max_tokens", "refusal", "model_context_window_exceeded", "pause_turn", "stop_sequence", null] as const)(
+    "zakonczenie inne niz end_turn (%s) to IncompleteOutputError z kosztem",
     async (stopReason) => {
       const { api } = fakeApi({ stop_reason: stopReason });
       const error: unknown = await new AnthropicLlmClient(api).generate(request).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(IncompleteOutputError);
-      expect(error).toMatchObject({ stopReason, usage: { inputTokens: 300, outputTokens: 40 } });
+      expect(error).toMatchObject({ stopReason: String(stopReason), usage: { inputTokens: 300, outputTokens: 40 } });
     },
   );
 
-  it.each(["end_turn", null] as const)("zakonczenie %s z odpowiedzia spoza schematu to InvalidOutputError", async (stopReason) => {
-    const content = [{ type: "text", text: '{"score":99}', citations: null }] as Message["content"];
-    const { api } = fakeApi({ stop_reason: stopReason, content });
+  it("odpowiedz spoza schematu to InvalidOutputError", async () => {
+    const { api } = fakeApi({ content: [{ type: "text", text: '{"score":99}', citations: null }] as Message["content"] });
     await expect(new AnthropicLlmClient(api).generate(request)).rejects.toBeInstanceOf(InvalidOutputError);
   });
 
-  it("fromApiKey ustawia klucz, 2 ponowienia i timeout 120 s w kliencie SDK", () => {
-    const llm = AnthropicLlmClient.fromApiKey("sk-test");
-    // Zagladamy do SDK: messages trzyma klienta, ktory przechowuje opcje.
-    const sdk = (llm as unknown as { messages: { _client: Record<string, unknown> } }).messages._client;
-    expect(sdk).toMatchObject({ apiKey: "sk-test", maxRetries: 2, timeout: 120_000 });
+  it("blad SDK wychodzi jako LlmTransportError", async () => {
+    const { api } = fakeApi(new Anthropic.APIConnectionTimeoutError());
+    await expect(new AnthropicLlmClient(api).generate(request)).rejects.toBeInstanceOf(LlmTransportError);
+  });
+});
+
+describe("toTransportError", () => {
+  const apiError = (status: number, headers: Record<string, string> = {}) =>
+    Anthropic.APIError.generate(status, { error: { type: "x", message: "m" } }, "m", new Headers(headers));
+
+  it.each([
+    ["przerwanie", new Anthropic.APIUserAbortError(), { retryable: false, mayHaveBeenBilled: true, status: null }],
+    ["timeout", new Anthropic.APIConnectionTimeoutError(), { retryable: true, mayHaveBeenBilled: true, status: null }],
+    ["zerwane polaczenie", new Anthropic.APIConnectionError({ message: "reset" }), { retryable: true, mayHaveBeenBilled: true }],
+    ["429", apiError(429), { retryable: true, mayHaveBeenBilled: false, status: 429 }],
+    ["529 przeciazenie", apiError(529), { retryable: true, mayHaveBeenBilled: false, status: 529 }],
+    ["500", apiError(500), { retryable: true, mayHaveBeenBilled: true, status: 500 }],
+    ["400", apiError(400), { retryable: false, mayHaveBeenBilled: false, status: 400 }],
+  ] as const)("%s", (_, error, expected) => {
+    const mapped = toTransportError(error);
+    expect(mapped).toBeInstanceOf(LlmTransportError);
+    expect(mapped).toMatchObject(expected);
+  });
+
+  it("czyta retry-after w sekundach, a bez niego zostawia null", () => {
+    expect(toTransportError(apiError(429, { "retry-after": "7" }))).toMatchObject({ retryAfterMs: 7000 });
+    expect(toTransportError(apiError(429, { "retry-after": "zaraz" }))).toMatchObject({ retryAfterMs: null });
+    expect(toTransportError(apiError(429, { "retry-after": "0" }))).toMatchObject({ retryAfterMs: null });
+    expect(toTransportError(apiError(429))).toMatchObject({ retryAfterMs: null });
+  });
+
+  it("komunikat mowi, co sie stalo", () => {
+    expect((toTransportError(apiError(400)) as Error).message).toMatch(/^API odrzucilo zapytanie \(400\): /);
+    expect((toTransportError(new Anthropic.APIUserAbortError()) as Error).message).toBe("Zapytanie przerwane");
+    expect((toTransportError(new Anthropic.APIConnectionError({ message: "reset" })) as Error).message).toBe("Brak odpowiedzi: reset");
+  });
+
+  it("blad spoza SDK (np. nasz) przechodzi bez zmian", () => {
+    const ours = new TypeError("bug");
+    expect(toTransportError(ours)).toBe(ours);
+  });
+
+  it("blad SDK bez kodu HTTP (nie przerwanie, nie polaczenie) przechodzi bez zmian", () => {
+    const odd = new Anthropic.APIError(undefined, undefined, "dziwny", undefined);
+    expect(toTransportError(odd)).toBe(odd);
+  });
+});
+
+describe("konfiguracja SDK", () => {
+  it("bez automatycznych ponowien (kazda proba przez budzet), timeout 120 s", () => {
+    expect(sdkOptions("sk-test")).toEqual({ apiKey: "sk-test", maxRetries: 0, timeout: 120_000 });
+  });
+
+  it("fromApiKey buduje klienta bez wysylania czegokolwiek", () => {
+    expect(AnthropicLlmClient.fromApiKey("sk-test")).toBeInstanceOf(AnthropicLlmClient);
   });
 });
