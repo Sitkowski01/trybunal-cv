@@ -12,6 +12,7 @@
     "test": "pnpm -r test",
     "lint": "eslint .",
     "arch": "depcruise packages --config .dependency-cruiser.cjs",
+    "mutation": "pnpm -r mutation",
     "check": "pnpm typecheck && pnpm lint && pnpm arch && pnpm test"
   },
   "devDependencies": {
