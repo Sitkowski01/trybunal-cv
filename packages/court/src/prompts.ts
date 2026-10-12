@@ -1,9 +1,12 @@
 import {
+  ATS_GATE,
   type Assessment,
   type Critic,
   CRITIC_IDS,
   type CriticId,
   criticById,
+  currentScores,
+  INVITE_THRESHOLD,
   type TrialState,
   type Verdict,
 } from "@trybunal/domain";
@@ -76,7 +79,8 @@ const speechOf = (state: TrialState) => ["Mowa oskarżenia:", state.prosecution 
 
 function debateLines(state: TrialState): string[] {
   return state.statements.map((s) => {
-    return `[runda ${String(s.round)}] ${criticById(s.criticId).name}: ${s.statement}`;
+    const change = s.revisedScore === null ? "" : ` (zmienia ocenę na ${String(s.revisedScore)})`;
+    return `[runda ${String(s.round)}] ${criticById(s.criticId).name}: ${s.statement}${change}`;
   });
 }
 
@@ -95,18 +99,32 @@ export function debateTask(state: TrialState, criticId: CriticId): string {
     ...speechOf(state),
     ...(transcript.length === 0 ? [] : ["Dotychczasowa debata:", ...transcript]),
   ];
+  const mine = state.assessments.length === CRITIC_IDS.length ? currentScores(state)[criticId] : null;
   return (
     `${wrap(record)}\n\n` +
-    `Runda ${String(state.round)}. Twoja kolej (${criticById(criticId).name}). ` +
+    `Runda ${String(state.round)}. Twoja kolej (${criticById(criticId).name})` +
+    (mine === null ? ". " : `, twoja aktualna ocena: ${String(mine)}/10. `) +
     "Odnieś się do argumentów innych. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null."
   );
 }
 
 export function judgeTask(state: TrialState, verdict: Verdict): string {
   const decision = verdict.decision === "invite" ? "ZAPROSIĆ NA ROZMOWĘ" : "ODRZUCIĆ";
+  const rewrites = bySeat(state).flatMap((a) =>
+    a.rewrites.map((r) => `${criticById(a.criticId).name}: „${r.original}” → „${r.proposed}” (${r.reason})`),
+  );
   const changes = verdict.mindChanges.map((m) => `${criticById(m.criticId).name}: ${String(m.from)} → ${String(m.to)}`);
+  const record = [
+    "Oceny niezależne:",
+    ...bySeat(state).flatMap(assessmentLines),
+    ...speechOf(state),
+    ...(state.statements.length === 0 ? [] : ["Debata:", ...debateLines(state)]),
+    ...(rewrites.length === 0 ? [] : ["Proponowane poprawki CV:", ...rewrites]),
+  ];
   return (
-    `Oceny:\n${wrap(bySeat(state).flatMap(assessmentLines))}\n\n` +
+    `${wrap(record)}\n\n` +
+    `Reguła werdyktu: zaproszenie, gdy średnia ocen czterech przysięgłych (prokurator nie głosuje) wynosi co najmniej ` +
+    `${String(INVITE_THRESHOLD)}, a Bot ATS dał co najmniej ${String(ATS_GATE)}.\n` +
     `Werdykt (ustalony regułą, nie zmieniaj go): ${decision}. Średnia przysięgłych: ${String(verdict.juryAverage)}. ` +
     `Rozrzut ocen: ${String(verdict.spread)}${verdict.disputed ? " (CV niejednoznaczne)" : ""}. ` +
     (verdict.atsGateFailed ? "CV nie przeszło filtra ATS. " : "") +
