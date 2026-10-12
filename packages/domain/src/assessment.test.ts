@@ -47,6 +47,15 @@ describe("AssessmentSchema", () => {
     expect(parse(overrides)).toBe(false);
   });
 
+  it.each(["low", "medium", "high"])("przyjmuje wage zastrzezenia %s", (severity) => {
+    expect(parse({ concerns: [{ quote: "a", issue: "b", severity }] })).toBe(true);
+  });
+
+  it("mowi, dlaczego poprawka jest odrzucona", () => {
+    const result = AssessmentSchema.safeParse({ ...valid, rewrites: [{ original: "a", proposed: "a", reason: "r" }] });
+    expect(result.error?.issues[0]?.message).toBe("Poprawka niczego nie zmienia");
+  });
+
   it("dopuszcza puste listy", () => {
     expect(parse({ strengths: [], concerns: [], rewrites: [] })).toBe(true);
   });
@@ -73,6 +82,24 @@ describe("findInventedQuotes", () => {
   it("nie zglasza cytatow, ktore sa w CV mimo innych bialych znakow i wielkosci liter", () => {
     expect(findInventedQuotes(valid, cv)).toEqual([]);
     expect(findInventedQuotes(valid, cv.toUpperCase())).toEqual([]);
+  });
+
+  const quoting = (...quotes: string[]): Assessment => ({
+    ...valid,
+    concerns: quotes.map((quote) => ({ quote, issue: "x", severity: "low" })),
+    rewrites: [],
+  });
+
+  it("cytat z bialym znakiem na koncu pasuje do konca CV", () => {
+    expect(findInventedQuotes(quoting("API gieldy.\n"), cv)).toEqual([]);
+  });
+
+  it("sklejone slowa nie sa cytatem slow rozdzielonych", () => {
+    expect(findInventedQuotes(quoting("EkspertReact"), cv)).toEqual(["EkspertReact"]);
+  });
+
+  it("porownanie po malych literach: ss nie jest cytatem ß", () => {
+    expect(findInventedQuotes(quoting("STRASSE"), "Mieszkam przy Straße")).toEqual(["STRASSE"]);
   });
 
   it("zglasza zmyslony cytat zastrzezenia i zmyslony fragment poprawki", () => {
