@@ -1,3 +1,8 @@
 packages:
   - packages/*
   - apps/*
+# Testcontainers ciagnie opcjonalne dodatki natywne (ssh2, cpu-features) — niepotrzebne, bez skryptow instalacji.
+allowBuilds:
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
