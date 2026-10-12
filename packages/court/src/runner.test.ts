@@ -1,4 +1,4 @@
-import { CRITIC_IDS, type CriticId } from "@trybunal/domain";
+import { CRITIC_IDS, type CriticId, replay, TrialEventSchema } from "@trybunal/domain";
 import {
   BudgetedLlmClient,
   FAKE_USAGE,
@@ -10,6 +10,8 @@ import {
   type StructuredRequest,
 } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_CONFIG } from "./config.js";
+import { RULES } from "./prompts.js";
 import { runTrial, type TrialInput } from "./runner.js";
 
 const input: TrialInput = { trialId: "t-1", cvText: "Jan. Java, Spring. Ekspert React.", jobOffer: "Junior Java", debateRounds: 1 };
@@ -26,6 +28,68 @@ const happy: FakeScript = (req) => {
   if (req.label.startsWith("statement:")) return { statement: "Podtrzymuje", revisedScore: null };
   return { justification: "Zapraszamy" };
 };
+
+describe("runTrial — przebieg", () => {
+  it("prowadzi rozprawe do werdyktu; dziennik odtwarza ten sam stan", async () => {
+    const run = await runTrial(input, { llm: new FakeLlmClient(happy) });
+    expect(run.state).toMatchObject({ phase: "closed", justification: "Zapraszamy", verdict: { decision: "invite", juryAverage: 6.25 } });
+    expect(run.events.map((e) => e.type)).toEqual([
+      "TrialFiled",
+      ...Array<string>(5).fill("AssessmentSubmitted"),
+      "ProsecutionDelivered",
+      ...Array<string>(5).fill("StatementMade"),
+      "VerdictAnnounced",
+    ]);
+    expect(replay(run.events)).toEqual(run.state);
+    expect(run.events.every((e) => TrialEventSchema.safeParse(e).success)).toBe(true);
+  });
+
+  it("kazde wywolanie ma etykiete fazy, model z konfiguracji i trafia do rejestru", async () => {
+    const llm = new FakeLlmClient(happy);
+    const run = await runTrial({ ...input, debateRounds: 2 }, { llm });
+    const labels = llm.calls.map((c) => c.label);
+    expect(labels.slice(5, 7)).toEqual(["prosecution", "statement:1:ats"]);
+    expect(labels.filter((l) => l.startsWith("statement:2:"))).toEqual(CRITIC_IDS.map((id) => `statement:2:${id}`));
+    expect(labels.at(-1)).toBe("justification");
+    expect(llm.calls.find((c) => c.label === "assessment:ats")?.model).toBe(DEFAULT_CONFIG.models.assessment.ats);
+    expect(llm.calls.at(-1)?.model).toBe("claude-opus-5-5");
+    expect(run.calls).toHaveLength(llm.calls.length);
+    expect(run.calls.every((c) => c.outcome === "ok" && c.attempt === 1)).toBe(true);
+  });
+
+  it("kazde zapytanie niesie wspolne zasady i dokumenty — ten sam poczatek do cache", async () => {
+    const llm = new FakeLlmClient(happy);
+    await runTrial(input, { llm });
+    for (const call of llm.calls) {
+      expect(call.rules).toBe(RULES);
+      expect(call.documents).toEqual([
+        { name: "cv", text: input.cvText },
+        { name: "oferta", text: input.jobOffer },
+      ]);
+    }
+  });
+
+  it("zmiana zdania w debacie trafia do werdyktu", async () => {
+    const turning: FakeScript = (req, i) =>
+      req.label === "statement:1:hr" ? { statement: "Zmieniam", revisedScore: 2 } : happy(req, i);
+    const run = await runTrial(input, { llm: new FakeLlmClient(turning) });
+    expect(run.state.verdict).toMatchObject({ decision: "reject", mindChanges: [{ criticId: "hr", from: 6, to: 2 }] });
+  });
+
+  it("onEvent dostaje kazde zdarzenie razem ze stanem po nim", async () => {
+    const seen: [string, string][] = [];
+    await runTrial(input, { llm: new FakeLlmClient(happy), onEvent: (e, s) => seen.push([e.type, s.phase]) });
+    expect(seen[0]).toEqual(["TrialFiled", "assessing"]);
+    expect(seen[5]).toEqual(["AssessmentSubmitted", "prosecution"]);
+    expect(seen.at(-1)).toEqual(["VerdictAnnounced", "closed"]);
+  });
+
+  it("niepoprawne wejscie to blad wywolujacego, zanim ktokolwiek zapyta model", async () => {
+    const llm = new FakeLlmClient(happy);
+    await expect(runTrial({ ...input, cvText: " " }, { llm })).rejects.toThrow();
+    expect(llm.calls).toEqual([]);
+  });
+});
 
 /** Klient, w ktorym kazda odpowiedz czeka na recznie wywolane resolve; reaguje na anulowanie. */
 function manual() {
@@ -99,7 +163,7 @@ describe("runTrial — przerwania", () => {
         : happy(req, i);
     const llm = new FakeLlmClient(lying);
     const run = await runTrial(input, { llm });
-    expect(run.state.phase).toBe("prosecution");
+    expect(run.state.phase).toBe("closed");
     expect(llm.calls.find((c) => c.label === "assessment:hr" && c.retry !== undefined)?.retry?.problems).toEqual([
       'Cytat "10 lat w Google" nie wystepuje doslownie w CV',
     ]);

@@ -1,11 +1,14 @@
 import {
   type Assessment,
+  announceVerdict,
   CRITIC_IDS,
   type CriticId,
   criticById,
   evolve,
   fileTrial,
   findInventedQuotes,
+  nextSpeaker,
+  pendingVerdict,
   type TrialEvent,
   TrialEventSchema,
   type TrialState,
@@ -14,11 +17,15 @@ import type { LlmClient, StructuredRequest } from "@trybunal/llm";
 import type { z } from "zod";
 import { ask, type CallRecord } from "./ask.js";
 import { abortReason, allOrNothing, sleep } from "./control.js";
-import { AssessmentOutput, type CourtConfig, DEFAULT_CONFIG } from "./config.js";
+import { AssessmentOutput, type CourtConfig, DEFAULT_CONFIG, JustificationOutput, ProsecutionOutput, StatementOutput } from "./config.js";
 import {
   ASSESSMENT_TASK,
+  debateTask,
   documents,
   instructionsFor,
+  JUDGE_INSTRUCTIONS,
+  judgeTask,
+  prosecutionTask,
   RULES,
 } from "./prompts.js";
 
@@ -45,7 +52,7 @@ export interface TrialRun {
 }
 
 /**
- * Rozprawa — na razie faza niezaleznych ocen; oskarzenie, debata i werdykt w kolejnym kroku. Kazde zdarzenie przechodzi przez schemat
+ * Cala rozprawa: oceny -> oskarzenie -> debata -> werdykt. Kazde zdarzenie przechodzi przez schemat
  * i reguly domeny, zanim trafi do dziennika. Blad, ktorego nie da sie naprawic ponowieniem
  * (budzet, odmowa modelu, anulowanie), konczy rozprawe zdarzeniem TrialAborted z powodem.
  */
@@ -96,6 +103,38 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
     const [first, ...rest] = CRITIC_IDS;
     await assess(first, options.signal);
     await allOrNothing(rest, (id, signal) => assess(id, signal), options.signal);
+
+    const { speech } = await question(options.signal, {
+      label: "prosecution",
+      model: config.models.prosecution,
+      maxTokens: config.maxTokens.prosecution,
+      instructions: instructionsFor(criticById("prosecutor")),
+      task: prosecutionTask(state),
+      schema: ProsecutionOutput,
+    });
+    emit({ type: "ProsecutionDelivered", speech });
+
+    for (let speaker = nextSpeaker(state); speaker !== null; speaker = nextSpeaker(state)) {
+      const { statement, revisedScore } = await question(options.signal, {
+        label: `statement:${String(state.round)}:${speaker}`,
+        model: config.models.statement,
+        maxTokens: config.maxTokens.statement,
+        instructions: instructionsFor(criticById(speaker)),
+        task: debateTask(state, speaker),
+        schema: StatementOutput,
+      });
+      emit({ type: "StatementMade", round: state.round, criticId: speaker, statement, revisedScore });
+    }
+
+    const { justification } = await question(options.signal, {
+      label: "justification",
+      model: config.models.justification,
+      maxTokens: config.maxTokens.justification,
+      instructions: JUDGE_INSTRUCTIONS,
+      task: judgeTask(state, pendingVerdict(state)),
+      schema: JustificationOutput,
+    });
+    emit(announceVerdict(state, justification));
   } catch (error) {
     emit({ type: "TrialAborted", reason: abortReason(error, options.signal) });
   }
