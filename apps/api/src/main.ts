@@ -1,0 +1,59 @@
+import { existsSync } from "node:fs";
+import { AnthropicLlmClient } from "@trybunal/llm";
+import pg from "pg";
+import { buildApp } from "./app.js";
+import { readConfig, toNanoUsd } from "./config.js";
+import { newKey, parseMasterKey } from "./crypto.js";
+import { TrialHub } from "./hub.js";
+import { Journal } from "./journal.js";
+import { migrate, PostgresEventStore } from "./postgres.js";
+import { rehearsalLlm } from "./rehearsal.js";
+import { TrialService } from "./service.js";
+import { InMemoryEventStore } from "./store.js";
+
+// Punkt wejscia serwera: konfiguracja, baza, model i zamykanie. Logika jest w modulach z testami.
+if (existsSync(".env")) {
+  process.loadEnvFile(".env");
+}
+const config = readConfig(process.env);
+
+let pool: pg.Pool | undefined;
+let journal: Journal;
+if (config.DATABASE_URL === undefined) {
+  console.warn("Brak DATABASE_URL — dziennik w pamieci, rozprawy znikna po restarcie.");
+  journal = new Journal(new InMemoryEventStore(), newKey());
+} else {
+  pool = new pg.Pool({ connectionString: config.DATABASE_URL });
+  await migrate(pool);
+  journal = new Journal(new PostgresEventStore(pool), parseMasterKey(config.TRYBUNAL_MASTER_KEY ?? ""));
+}
+
+const apiKey = config.ANTHROPIC_API_KEY;
+const llm = config.TRYBUNAL_REHEARSAL || apiKey === undefined ? rehearsalLlm : () => AnthropicLlmClient.fromApiKey(apiKey);
+const hub = new TrialHub();
+const service = new TrialService({
+  journal,
+  hub,
+  llm,
+  trialBudgetNanoUsd: toNanoUsd(config.TRIAL_BUDGET_USD),
+  dailyBudgetNanoUsd: toNanoUsd(config.DAILY_BUDGET_USD),
+  maxRunning: config.MAX_RUNNING_TRIALS,
+  onError: (error, trialId) => {
+    app.log.error({ err: error, trialId }, "Blad w tle rozprawy");
+  },
+});
+const app = await buildApp({ service, journal, hub, rateLimit: { max: config.RATE_LIMIT_PER_HOUR, timeWindowMs: 3_600_000 }, logger: true });
+
+// Zamkniecie: najpierw rozprawy zapisuja przerwanie, potem serwer i baza.
+const shutdown = async () => {
+  await service.close();
+  await app.close();
+  await pool?.end();
+};
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    void shutdown();
+  });
+}
+
+await app.listen({ port: config.PORT, host: config.HOST });

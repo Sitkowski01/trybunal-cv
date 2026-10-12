@@ -14,7 +14,8 @@
     "arch": "depcruise packages apps --config .dependency-cruiser.cjs",
     "mutation": "pnpm build && pnpm -r --workspace-concurrency=1 mutation",
     "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test",
-    "trial": "node packages/court/dist/bin.js"
+    "trial": "node packages/court/dist/bin.js",
+    "api": "node apps/api/dist/main.js"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
