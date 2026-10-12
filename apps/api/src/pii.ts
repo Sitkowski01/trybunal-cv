@@ -39,7 +39,8 @@ const RULES: readonly Rule[] = [
     pattern: /\b(?:data urodzenia|urodzon[ya]|ur\.)\s*:?\s*\d{1,2}[./-]\d{1,2}[./-]\d{4}/giu,
     replacement: "[DATA URODZENIA]",
   },
-  { kind: "pesel", pattern: /(?<!\d)\d{11}(?!\d)/gu, replacement: "[PESEL]" },
+  // "+48601234567" tez ma 11 cyfr — po plusie to telefon, nie PESEL.
+  { kind: "pesel", pattern: /(?<![\d+])\d{11}(?!\d)/gu, replacement: "[PESEL]" },
   {
     kind: "phone",
     // Konkretne formaty zamiast "ciag cyfr i odstepow": zachlanny ciag polykal sasiedni kod pocztowy
@@ -52,7 +53,8 @@ const RULES: readonly Rule[] = [
   { kind: "postalCode", pattern: /(?<!\d)\d{2}-\d{3}(?!\d)/gu, replacement: "[KOD POCZTOWY]" },
   {
     kind: "street",
-    pattern: /\b(?:ul|al|os|pl)\.\s*\p{Lu}[\p{L}.-]{0,40}(?:\s+\p{Lu}[\p{L}.-]{0,40}){0,4}\s+\d+[a-z]?(?:\/\d+[a-z]?)?/gu,
+    // Pierwszy wyraz takze z malej litery ("ul. kwiatowa 5" w pospiesznie pisanym CV).
+    pattern: /\b(?:ul|al|os|pl)\.\s*\p{L}[\p{L}.-]{0,40}(?:\s+\p{Lu}[\p{L}.-]{0,40}){0,4}\s+\d+[a-z]?(?:\/\d+[a-z]?)?/gu,
     replacement: "[ADRES]",
   },
 ];
@@ -64,15 +66,14 @@ function nameRule(name: string): Rule | null {
     return null;
   }
   const escaped = parts.map((p) => p.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
+  // Calosc pierwsza (najdluzsza), zeby "Anna Nowak" bylo jedna zamiana, a nie dwiema.
   const alternatives = [escaped.join("\\s+"), ...escaped];
-  // Dluzsze najpierw, zeby "Anna Nowak" bylo jedna zamiana, a nie dwiema.
-  alternatives.sort((a, b) => b.length - a.length);
   return { kind: "name", pattern: new RegExp(`(?<!\\p{L})(?:${alternatives.join("|")})(?!\\p{L})`, "giu"), replacement: "[KANDYDAT]" };
 }
 
 export function anonymize(text: string, candidateName?: string): Anonymized {
   const found: Partial<Record<PiiKind, number>> = {};
-  const name = candidateName === undefined ? null : nameRule(candidateName.trim());
+  const name = candidateName === undefined ? null : nameRule(candidateName);
   let result = text;
   for (const rule of name === null ? RULES : [...RULES, name]) {
     result = result.replace(rule.pattern, () => {

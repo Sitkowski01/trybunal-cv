@@ -19,6 +19,23 @@ describe("anonymize — dane kontaktowe", () => {
     ["00-950", "[KOD POCZTOWY]", "postalCode"],
     ["ul. Kwiatowa 5/12", "[ADRES]", "street"],
     ["al. Jana Pawła 12a", "[ADRES]", "street"],
+    ["ul.Kwiatowa 5", "[ADRES]", "street"],
+    ["ul. kwiatowa 5", "[ADRES]", "street"],
+    ["os.  Nowy  Swiat   7", "[ADRES]", "street"],
+    ["http://annanowak.dev", "[LINK]", "link"],
+    ["gitlab.com/anowak", "[LINK]", "link"],
+    ["urodzony 1.2.1990", "[DATA URODZENIA]", "birthDate"],
+    ["urodzona: 01-02-1990", "[DATA URODZENIA]", "birthDate"],
+    ["ur.12.03.1995", "[DATA URODZENIA]", "birthDate"],
+    ["data urodzenia : 1.2.1990", "[DATA URODZENIA]", "birthDate"],
+    ["(22)123 45 67", "[TELEFON]", "phone"],
+    ["(22) 12345 67", "[TELEFON]", "phone"],
+    ["(22) 123 4567", "[TELEFON]", "phone"],
+    ["+48601234567", "[TELEFON]", "phone"],
+    ["22 1234567", "[TELEFON]", "phone"],
+    ["22-123-45-67", "[TELEFON]", "phone"],
+    ["601234 567", "[TELEFON]", "phone"],
+    ["601 234567", "[TELEFON]", "phone"],
   ])("%s -> %s", (input, replacement, kind) => {
     const result = anonymize(`Kontakt: ${input}, dalej tekst`);
     expect(result.text).toBe(`Kontakt: ${replacement}, dalej tekst`);
@@ -111,8 +128,12 @@ describe("anonymize — imie i nazwisko", () => {
     expect(anonymize("O'Brien (Jr.) pisze", "O'Brien (Jr.)").text).toBe("[KANDYDAT] pisze");
   });
 
-  it("puste albo jednoliterowe imie niczego nie zmienia", () => {
-    expect(anonymize("A B C", "  ")).toEqual({ text: "A B C", found: {} });
-    expect(anonymize("A B C", "A")).toEqual({ text: "A B C", found: {} });
+  it("puste albo jednoliterowe imie niczego nie zmienia (nie dopasowuje pustego miejsca)", () => {
+    expect(anonymize("A B, 1 2", "  ")).toEqual({ text: "A B, 1 2", found: {} });
+    expect(anonymize("A B, 1 2", "A")).toEqual({ text: "A B, 1 2", found: {} });
+  });
+
+  it("dwuliterowa czesc imienia jest zamieniana; odstepy wokol imienia bez znaczenia", () => {
+    expect(anonymize("Al Bundy, Al i Bundy", " Al  Bundy ").text).toBe("[KANDYDAT], [KANDYDAT] i [KANDYDAT]");
   });
 });
