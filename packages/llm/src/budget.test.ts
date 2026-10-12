@@ -11,7 +11,8 @@ const request: StructuredRequest<z.infer<typeof Answer>> = {
   label: "a",
   model: "claude-haiku-5-5",
   maxTokens: 100,
-  sharedContext: "Zasady i CV",
+  rules: "Zasady",
+  documents: [{ name: "cv", text: "CV" }],
   instructions: "HR",
   task: "Ocen",
   schema: Answer,
@@ -26,7 +27,7 @@ describe("worstCaseCostNanoUsd", () => {
 
   it("kazdy bajt promptu i schematu jako token po stawce zapisu do cache, wyjscie po maxTokens", () => {
     const schemaBytes = JSON.stringify(zodOutputFormat(Answer).schema).length;
-    const promptBytes = "Zasady i CV".length + "HR".length + "Ocen".length;
+    const promptBytes = "Zasady".length + "cv".length + "CV".length + "HR".length + "Ocen".length;
     expect(worst).toBe((promptBytes + schemaBytes + OVERHEAD_TOKENS) * haiku.cacheWrite + 100 * haiku.output);
   });
 

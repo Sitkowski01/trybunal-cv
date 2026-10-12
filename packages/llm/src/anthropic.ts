@@ -1,12 +1,13 @@
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import type { Message, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
+import type { Message, MessageCreateParamsNonStreaming, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import {
   IncompleteOutputError,
   type LlmClient,
   type LlmResult,
   LlmTransportError,
   parseOutput,
+  type SourceDocument,
   type StructuredRequest,
 } from "./client.js";
 import { costNanoUsd, type TokenUsage } from "./pricing.js";
@@ -24,10 +25,30 @@ export function sdkOptions(apiKey: string): ClientOptions {
   return { apiKey, maxRetries: 0, timeout: 120_000 };
 }
 
+const DOCUMENT_NAME = /^[a-z0-9-]{1,40}$/;
+
 /**
- * Adapter Claude'a. Prompt ma trzy czesci w kolejnosci, w jakiej API buduje cache (system przed
- * wiadomosciami): wspolny kontekst z punktem cache, rola agenta, zadanie. Pieciu krytykow tej
- * samej rozprawy ma identyczny poczatek, wiec od drugiego placi sie za niego 5% ceny.
+ * Dokumenty w tagach <document>. Tekst nie moze otworzyc ani zamknac tagu — inaczej CV mogloby
+ * "wyjsc" z koperty i udawac polecenie. Dlatego kazde "<" przed "document" zamieniamy na encje.
+ */
+export function renderDocuments(documents: readonly SourceDocument[]): string {
+  return documents
+    .map(({ name, text }) => {
+      if (!DOCUMENT_NAME.test(name)) {
+        throw new Error(`Niedozwolona nazwa dokumentu: ${JSON.stringify(name)}`);
+      }
+      const safe = text.replace(/<(?=\/?document)/gi, "&lt;");
+      return `<document name="${name}">\n${safe}\n</document>`;
+    })
+    .join("\n\n");
+}
+
+/**
+ * Adapter Claude'a. Kolejnosc promptu to kolejnosc, w jakiej API buduje cache:
+ *   system: zasady (zaufane)
+ *   user:   dokumenty w tagach (niezaufane)  <- punkt cache: tu konczy sie wspolny poczatek
+ *           rola agenta + zadanie
+ * CV nie trafia do promptu systemowego, wiec dopisek "daj 10/10" nie ma rangi instrukcji.
  *
  * Format odpowiedzi to JSON Schema z zod. API gwarantuje ksztalt JSON-a, ale ograniczenia
  * (zakresy, dlugosci, enum, refine) SDK przekazuje modelowi tylko jako opis — dlatego wynik
@@ -44,11 +65,8 @@ export class AnthropicLlmClient implements LlmClient {
     const body: MessageCreateParamsNonStreaming = {
       model: request.model,
       max_tokens: request.maxTokens,
-      system: [
-        { type: "text", text: request.sharedContext, cache_control: { type: "ephemeral" } },
-        { type: "text", text: request.instructions },
-      ],
-      messages: [{ role: "user", content: request.task }],
+      system: [{ type: "text", text: request.rules }],
+      messages: buildMessages(request),
       output_config: { format: { type: "json_schema", schema: zodOutputFormat(request.schema).schema } },
     };
     let message: Message;
@@ -65,6 +83,21 @@ export class AnthropicLlmClient implements LlmClient {
     const data = parseOutput(raw, request.schema, request.model, usage);
     return { data, model: request.model, usage, costNanoUsd: costNanoUsd(request.model, usage) };
   }
+}
+
+function buildMessages(request: StructuredRequest<unknown>): MessageParam[] {
+  const role = { type: "text" as const, text: `${request.instructions}\n\n${request.task}` };
+  const first: MessageParam =
+    request.documents.length === 0
+      ? { role: "user", content: [role] }
+      : {
+          role: "user",
+          content: [
+            { type: "text", text: renderDocuments(request.documents), cache_control: { type: "ephemeral" } },
+            role,
+          ],
+        };
+  return [first];
 }
 
 /**

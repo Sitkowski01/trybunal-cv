@@ -18,7 +18,7 @@ export class BudgetExceededError extends Error {
   }
 }
 
-/** Zapas na tokeny, ktorych nie widac w tekscie: znaczniki rol, opakowanie formatu odpowiedzi. */
+/** Zapas na tokeny, ktorych nie widac w tekscie: znaczniki rol, tagi dokumentow, opakowanie formatu. */
 export const OVERHEAD_TOKENS = 1000;
 
 const encoder = new TextEncoder();
@@ -33,7 +33,8 @@ const bytes = (text: string) => encoder.encode(text).length;
  */
 export function worstCaseCostNanoUsd(request: StructuredRequest<unknown>): number {
   const texts = [
-    request.sharedContext,
+    request.rules,
+    ...request.documents.flatMap((d) => [d.name, d.text]),
     request.instructions,
     request.task,
     JSON.stringify(zodOutputFormat(request.schema).schema),

@@ -6,19 +6,27 @@ import { costNanoUsd, type ModelId, type TokenUsage } from "./pricing.js";
  * za nim Claude, w testach atrapa, w demo nagranie. Kazde zapytanie zwraca dane juz sprawdzone
  * schematem i koszt w nanodolarach.
  */
+
+/** Dokument od uzytkownika (CV, oferta). Niezaufany: to dane do oceny, nie polecenia. */
+export interface SourceDocument {
+  /** Krotka nazwa, np. "cv" — male litery, cyfry, myslnik. */
+  readonly name: string;
+  readonly text: string;
+}
+
 export interface StructuredRequest<T> {
-  /** Do logow i kosztow, np. "assessment:hr". */
+  /** Do logow, kosztow i nagran, np. "assessment:hr". */
   readonly label: string;
   readonly model: ModelId;
   readonly maxTokens: number;
-  /**
-   * Wspolny poczatek promptu dla wszystkich agentow rozprawy (zasady, CV, oferta). Idzie
-   * pierwszy i jest oznaczony do cache — kolejni agenci placa za niego ulamek ceny.
-   */
-  readonly sharedContext: string;
-  /** Rola agenta (persona, rubryka) — juz po punkcie cache, bo rozna u kazdego. */
+  /** Zaufane zasady, wspolne dla wszystkich agentow rozprawy. */
+  readonly rules: string;
+  /** Niezaufane dokumenty, wspolne dla wszystkich agentow. Razem z zasadami tworza poczatek do cache. */
+  readonly documents: readonly SourceDocument[];
+  /** Rola agenta (persona, rubryka) — juz za punktem cache, bo rozna u kazdego. */
   readonly instructions: string;
   readonly task: string;
+  /** Schemat odpowiedzi; bez .transform(), bo transformacji nie da sie zapisac w JSON Schema. */
   readonly schema: z.ZodType<T>;
 }
 
@@ -33,7 +41,7 @@ export interface LlmClient {
   generate<T>(request: StructuredRequest<T>, signal?: AbortSignal): Promise<LlmResult<T>>;
 }
 
-/** Blad po stronie modelu. Tokeny i tak zostaly zuzyte, wiec blad niesie ich koszt. */
+/** Model odpowiedzial, ale odpowiedz jest do niczego. Tokeny zuzyte, wiec blad niesie ich koszt. */
 export class LlmError extends Error {
   override readonly name: string = "LlmError";
 
@@ -50,7 +58,7 @@ export class LlmError extends Error {
   }
 }
 
-/** Odpowiedz nie jest JSON-em albo nie spelnia schematu — mozna ponowic z informacja, co jest zle. */
+/** Odpowiedz nie jest JSON-em albo nie spelnia schematu — mozna ponowic. */
 export class InvalidOutputError extends LlmError {
   override readonly name = "InvalidOutputError";
 
@@ -64,7 +72,7 @@ export class InvalidOutputError extends LlmError {
   }
 }
 
-/** Model skonczyl przez limit tokenow albo odmowe — odpowiedz jest niepelna. */
+/** Model nie skonczyl normalnie: limit tokenow ("max_tokens" — ponow z wiekszym), odmowa ("refusal" — nie ponawiaj). */
 export class IncompleteOutputError extends LlmError {
   override readonly name = "IncompleteOutputError";
 
@@ -96,7 +104,7 @@ export class LlmTransportError extends Error {
   }
 }
 
-/** Sprawdza surowy tekst odpowiedzi schematem; wspolne dla adaptera Claude i atrapy. */
+/** Sprawdza surowy tekst odpowiedzi schematem; wspolne dla adaptera Claude i atrap. */
 export function parseOutput<T>(raw: string, schema: z.ZodType<T>, model: ModelId, usage: TokenUsage): T {
   let json: unknown;
   try {
