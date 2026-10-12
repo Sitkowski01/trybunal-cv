@@ -1,4 +1,4 @@
-import type { Assessment } from "./assessment.js";
+import { type Assessment, findInventedQuotes, ScoreSchema } from "./assessment.js";
 import { CRITIC_IDS, type CriticId } from "./critics.js";
 import { deliberate, type Scores, type Verdict } from "./verdict.js";
 
@@ -103,6 +103,9 @@ export function evolve(state: TrialState, event: TrialEvent): TrialState {
       return makeStatement(state, event);
     case "VerdictAnnounced":
       return announceVerdict(state, event.justification);
+    default:
+      // Typ wyklucza ten przypadek, ale zdarzenia przyjda tez z bazy, gdzie typ niczego nie gwarantuje.
+      return fail(`Nieznane zdarzenie: ${String((event as { type: unknown }).type)}`);
   }
 }
 
@@ -116,7 +119,7 @@ export function replay(events: readonly TrialEvent[]): TrialState {
 
 function requirePhase(state: TrialState, phase: Phase, action: string): void {
   if (state.phase !== phase) {
-    fail(`${action} mozliwe w fazie ${phase}, a rozprawa jest w fazie ${state.phase}`);
+    return fail(`${action} mozliwe w fazie ${phase}, a rozprawa jest w fazie ${state.phase}`);
   }
 }
 
@@ -125,6 +128,10 @@ function submitAssessment(state: TrialState, assessment: Assessment): TrialState
   const id = assessment.criticId;
   if (state.assessments.some((a) => a.criticId === id)) {
     return fail(`Krytyk ${id} juz zlozyl ocene`);
+  }
+  const invented = findInventedQuotes(assessment, state.cvText);
+  if (invented.length > 0) {
+    return fail(`Krytyk ${id} cytuje cos, czego nie ma w CV: ${invented.join(" | ")}`);
   }
   const assessments = [...state.assessments, assessment];
   // Id sa unikalne i z zamknietej listy, wiec komplet = tyle ocen, ilu krytykow.
@@ -153,6 +160,9 @@ function makeStatement(state: TrialState, event: Extract<TrialEvent, { type: "St
   if (event.round !== state.round || event.criticId !== expected) {
     return fail(`Teraz mowi ${String(expected)} w rundzie ${String(state.round)}`);
   }
+  if (event.revisedScore !== null && !ScoreSchema.safeParse(event.revisedScore).success) {
+    return fail(`Nowa ocena ${String(event.revisedScore)} poza skala 1-10`);
+  }
   const { round, criticId, statement, revisedScore } = event;
   const statements = [...state.statements, { round, criticId, statement, revisedScore }];
   const roundOver = criticId === CRITIC_IDS[CRITIC_IDS.length - 1];
@@ -171,12 +181,14 @@ function announceVerdict(state: TrialState, justification: string): TrialState {
   return { ...state, verdict, justification, phase: "closed" };
 }
 
-// Rzutowanie jest bezpieczne od fazy prosecution: wtedy kazdy krytyk ma dokladnie jedna ocene.
-// Wczesniej wynik jest niepelny — dlatego funkcje wolamy tylko po zebraniu ocen.
 type PartialScores = Partial<Record<CriticId, number>>;
 
-/** Oceny z niezaleznej rundy, zanim ktokolwiek uslyszal innych. */
+/** Oceny z niezaleznej rundy, zanim ktokolwiek uslyszal innych. Dostepne po zebraniu wszystkich. */
 export function initialScores(state: TrialState): Scores {
+  if (state.assessments.length < CRITIC_IDS.length) {
+    return fail("Oceny nie sa jeszcze kompletne");
+  }
+  // Bezpieczne: wyzej sprawdzone, ze kazdy krytyk ma dokladnie jedna ocene.
   return Object.fromEntries(state.assessments.map((a) => [a.criticId, a.score])) as PartialScores as Scores;
 }
 

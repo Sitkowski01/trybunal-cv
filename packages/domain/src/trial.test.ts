@@ -118,6 +118,20 @@ describe("oceny niezalezne", () => {
     rejects([filed(), ...allAssessed, submitted("ats")], /Ocena mozliwe w fazie assessing.*prosecution/);
   });
 
+  it("odrzuca ocene cytujaca cos, czego nie ma w CV", () => {
+    const invented: TrialEvent = {
+      type: "AssessmentSubmitted",
+      assessment: { ...assessment("hr"), concerns: [{ quote: "10 lat w Google", issue: "x", severity: "high" }] },
+    };
+    rejects([filed(), invented], /hr cytuje cos, czego nie ma w CV: 10 lat w Google/);
+  });
+
+  it("oceny sa dostepne dopiero, gdy oceni kazdy krytyk", () => {
+    const state = replay([filed(), ...allAssessed.slice(0, 4)]);
+    expect(() => initialScores(state)).toThrow(/nie sa jeszcze kompletne/);
+    expect(() => currentScores(state)).toThrow(TrialRuleError);
+  });
+
   it("oceny poczatkowe to wyniki z niezaleznej rundy", () => {
     const events = [filed(), ...CRITIC_IDS.map((id, i) => submitted(id, i + 1))];
     expect(initialScores(replay(events))).toEqual({ ats: 1, hr: 2, techLead: 3, hiringManager: 4, prosecutor: 5 });
@@ -165,6 +179,14 @@ describe("oskarzenie i debata", () => {
     expect(afterLast.statements).toHaveLength(10);
   });
 
+  it.each([0, 11, 6.5, Number.NaN])("odrzuca zmiane oceny na %d", (score) => {
+    rejects([filed(), ...allAssessed, prosecution, statement(1, "ats", score)], /poza skala 1-10/);
+  });
+
+  it("po ostatniej rundzie nikt juz nie zabiera glosu", () => {
+    rejects([filed(1), ...allAssessed, prosecution, ...round(1), statement(2, "ats")], /Wypowiedz mozliwe w fazie debate/);
+  });
+
   it("nikt nie mowi poza debata", () => {
     expect(nextSpeaker(replay([filed(), ...allAssessed]))).toBeNull();
   });
@@ -208,6 +230,11 @@ describe("werdykt i zakonczenie", () => {
         abortReason: "przekroczony budzet",
       });
     }
+  });
+
+  it("nieznane zdarzenie, np. z bazy, to blad reguly, a nie cichy undefined", () => {
+    const unknown = { type: "SomethingElse" } as unknown as TrialEvent;
+    rejects([filed(), unknown], /Nieznane zdarzenie: SomethingElse/);
   });
 
   it("przerwana rozprawa nie przyjmuje zdarzen", () => {
