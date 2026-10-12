@@ -13,13 +13,16 @@ import {
 import { costSummary, narrate } from "./narration.js";
 import { runTrial } from "./runner.js";
 
-/** Plik, konsola i model wstrzykiwane, zeby CLI dalo sie przetestowac bez dysku i bez sieci. */
+/** Plik, katalog, konsola i model wstrzykiwane, zeby CLI dalo sie przetestowac bez dysku i bez sieci. */
 export interface CliIo {
   readonly readText: (path: string) => Promise<string>;
   readonly writeText: (path: string, text: string) => Promise<void>;
+  readonly makeDir: (path: string) => Promise<void>;
   readonly log: (line: string) => void;
   readonly apiKey: string | undefined;
   readonly createLlm?: (apiKey: string) => LlmClient;
+  /** Ctrl+C: rozprawa konczy sie zdarzeniem TrialAborted, a pliki i tak sie zapisza. */
+  readonly signal?: AbortSignal;
   readonly newId?: () => string;
 }
 
@@ -95,21 +98,31 @@ async function run(argv: readonly string[], io: CliIo): Promise<number> {
     throw new UsageError("Brak ANTHROPIC_API_KEY (w srodowisku albo w pliku .env). Bez klucza mozna odtworzyc nagranie: --replay.");
   }
 
-  const outDir = args.out;
+  // Katalog na wyniki przed rozprawa: blad zapisu ma wyjsc, zanim zaplacimy, a nie po.
+  const outDir = join(args.out, trialId);
+  try {
+    await io.makeDir(outDir);
+  } catch (error) {
+    throw new UsageError(`Nie mozna utworzyc katalogu ${outDir}: ${(error as Error).message}`);
+  }
+
   const llm = new BudgetedLlmClient(source, Math.round(budgetUsd * 1e9));
   const result = await runTrial(input, {
     llm,
+    ...(io.signal === undefined ? {} : { signal: io.signal }),
     onEvent: (event, state) => {
       io.log(narrate(event, state));
     },
   });
 
-  await io.writeText(join(outDir, "events.json"), JSON.stringify(result.events, null, 2));
-  await io.writeText(join(outDir, "calls.json"), JSON.stringify(result.calls, null, 2));
+  // Najpierw nagranie — to za nie zaplacilismy i jego nie da sie odtworzyc.
   if (recorder !== undefined) {
     await io.writeText(join(outDir, "cassette.json"), JSON.stringify(recorder.cassette(), null, 2));
   }
+  await io.writeText(join(outDir, "events.json"), JSON.stringify(result.events, null, 2));
+  await io.writeText(join(outDir, "calls.json"), JSON.stringify(result.calls, null, 2));
   io.log(costSummary(result.calls));
+  io.log(`Wyniki: ${outDir}`);
   return result.state.phase === "closed" ? 0 : 1;
 }
 

@@ -87,9 +87,10 @@ pnpm mutation   # mutation testing (Stryker)
 # Prawdziwa rozprawa (klucz w zmiennej ANTHROPIC_API_KEY albo w pliku .env):
 pnpm build
 pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend.md
-# Wynik w out/: events.json (dziennik), calls.json (koszty), cassette.json (nagranie).
+# Wynik w out/<id rozprawy>/: cassette.json (nagranie), events.json (dziennik), calls.json (koszty).
+# Ctrl+C przerywa rozprawę, ale zapisuje to, co już jest.
 # Odtworzenie nagrania bez klucza i bez kosztów:
-pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend.md --replay out/cassette.json
+pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend.md --replay out/<id rozprawy>/cassette.json
 ```
 
 ## Jakość

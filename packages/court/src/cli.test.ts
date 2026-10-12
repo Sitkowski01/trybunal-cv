@@ -16,10 +16,13 @@ const happy: FakeScript = (req) => {
 
 interface Memory {
   readonly apiKey?: string | null;
+  readonly makeDir?: (path: string) => Promise<void>;
+  readonly signal?: AbortSignal;
 }
 
 function memory(files: Record<string, string>, options: Memory = {}) {
   const written = new Map<string, string>();
+  const dirs: string[] = [];
   const lines: string[] = [];
   const llm = new FakeLlmClient(happy);
   const io: CliIo = {
@@ -28,26 +31,29 @@ function memory(files: Record<string, string>, options: Memory = {}) {
       written.set(path, text);
       return Promise.resolve();
     },
+    makeDir: options.makeDir ?? ((path) => (dirs.push(path), Promise.resolve())),
     log: (line) => lines.push(line),
     apiKey: options.apiKey === null ? undefined : (options.apiKey ?? "sk-test"),
     createLlm: () => llm,
     newId: () => "t-1",
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
-  return { io, written, lines, llm };
+  return { io, written, dirs, lines, llm };
 }
 
 const files = { "cv.md": "Jan. Java, Spring.", "oferta.md": "Junior Java" };
 const args = ["--cv", "cv.md", "--offer", "oferta.md"];
-const out = (name: string, dir = "out") => join(dir, name);
+const out = (name: string, dir = "out") => join(dir, "t-1", name);
 
 describe("CLI — rozprawa", () => {
-  it("prowadzi rozprawe, pokazuje przebieg i zapisuje dziennik, koszty i nagranie", async () => {
-    const { io, written, lines } = memory(files);
+  it("prowadzi rozprawe, pokazuje przebieg i zapisuje najpierw nagranie, potem dziennik i koszty", async () => {
+    const { io, written, dirs, lines } = memory(files);
     expect(await main(args, io)).toBe(0);
+    expect(dirs).toEqual([join("out", "t-1")]);
     expect(lines[0]).toBe("[wniesienie] rozprawa t-1, rund debaty: 1");
     expect(lines.some((l) => l.startsWith("[werdykt] ZAPROSIC NA ROZMOWE (srednia 6.5) — Zapraszamy"))).toBe(true);
-    expect(lines.at(-1)).toMatch(/^Koszt: \$\d+\.\d{4} za 12 wywolan/);
-    expect([...written.keys()]).toEqual([out("events.json"), out("calls.json"), out("cassette.json")]);
+    expect(lines.slice(-2)).toEqual([expect.stringMatching(/^Koszt: \$\d+\.\d{4} za 12 wywolan/), `Wyniki: ${join("out", "t-1")}`]);
+    expect([...written.keys()]).toEqual([out("cassette.json"), out("events.json"), out("calls.json")]);
     expect(JSON.parse(written.get(out("events.json")) ?? "[]")).toHaveLength(13);
   });
 
@@ -61,11 +67,20 @@ describe("CLI — rozprawa", () => {
     expect(written.has(out("cassette.json"))).toBe(false);
   });
 
-  it("za maly budzet przerywa rozprawe, konczy kodem 1 i zapisuje pliki", async () => {
+  it("za maly budzet przerywa rozprawe, konczy kodem 1 i i tak zapisuje pliki", async () => {
     const { io, lines, written } = memory(files);
     expect(await main([...args, "--budget-usd", "0.0001"], io)).toBe(1);
     expect(lines.some((l) => l.startsWith("[przerwano] Budzet $0.0001"))).toBe(true);
     expect(written.has(out("events.json"))).toBe(true);
+  });
+
+  it("Ctrl+C (sygnal) konczy rozprawe jako anulowana i zapisuje nagranie", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { io, lines, written } = memory(files, { signal: controller.signal });
+    expect(await main(args, io)).toBe(1);
+    expect(lines).toContain("[przerwano] Rozprawa anulowana (zebrane oceny: 0/5)");
+    expect(written.has(out("cassette.json"))).toBe(true);
   });
 });
 
@@ -117,6 +132,13 @@ describe("CLI — bledy wywolania (kod 2, zanim cokolwiek zaplacimy)", () => {
     const { io, lines } = memory(files, { apiKey: null });
     expect(await main(args, io)).toBe(2);
     expect(lines).toEqual(["Brak ANTHROPIC_API_KEY (w srodowisku albo w pliku .env). Bez klucza mozna odtworzyc nagranie: --replay."]);
+  });
+
+  it("katalog wynikow, ktorego nie da sie utworzyc, wychodzi przed rozprawa", async () => {
+    const { io, lines, llm } = memory(files, { makeDir: () => Promise.reject(new Error("EEXIST")) });
+    expect(await main(args, io)).toBe(2);
+    expect(lines).toEqual([`Nie mozna utworzyc katalogu ${join("out", "t-1")}: EEXIST`]);
+    expect(llm.calls).toEqual([]);
   });
 
   it("blad, ktory nie jest bledem wywolania, wychodzi dalej", async () => {
