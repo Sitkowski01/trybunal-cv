@@ -11,6 +11,8 @@ import type { Verdict } from "./verdict.js";
 export const MAX_DEBATE_ROUNDS = 3;
 export const MAX_CV_CHARS = 30_000;
 export const MAX_JOB_OFFER_CHARS = 10_000;
+/** CV jako PDF: limit serwera i formularza w przegladarce. */
+export const MAX_PDF_BYTES = 2_097_152; // 2 MiB
 
 const CriticIdSchema = z.enum(CRITIC_IDS);
 
@@ -63,7 +65,9 @@ export type TrialEvent = z.infer<typeof TrialEventSchema>;
  * narzedziach deweloperskich i logach proxy. Jeden schemat dla serwera i frontendu.
  */
 export const PublicTrialEventSchema = z.discriminatedUnion("type", [
-  TrialFiledSchema.omit({ cvText: true, jobOffer: true }).extend({
+  // Scisle: wniesienie z tekstem CV to wyciek, a nie pole do cichego pominiecia.
+  z.strictObject({
+    ...TrialFiledSchema.omit({ cvText: true, jobOffer: true }).shape,
     cvChars: z.number().int().min(0),
     jobOfferChars: z.number().int().min(0),
   }),

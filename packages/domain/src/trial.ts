@@ -1,6 +1,6 @@
 import { type Assessment, findInventedQuotes, ScoreSchema } from "./assessment.js";
 import { CRITIC_IDS, type CriticId } from "./critics.js";
-import { MAX_DEBATE_ROUNDS, type TrialEvent } from "./events.js";
+import { MAX_DEBATE_ROUNDS, type PublicTrialEvent, type TrialEvent } from "./events.js";
 import { deliberate, RULE_VERSION, type Scores, type Verdict } from "./verdict.js";
 
 /**
@@ -68,6 +68,27 @@ export function fileTrial(event: TrialEvent): TrialState {
 }
 
 export function evolve(state: TrialState, event: TrialEvent): TrialState {
+  return step(state, event, true);
+}
+
+/**
+ * Rozprawa widziana z zewnatrz (przegladarka, scena): zdarzenia bez tekstu CV. Te same reguly
+ * kolejnosci i faz co evolve, tylko bez sprawdzania cytatow — nie ma z czym ich porownac,
+ * a serwer sprawdzil je przed zapisem do dziennika.
+ */
+export function filePublicTrial(event: PublicTrialEvent): TrialState {
+  if (event.type !== "TrialFiled") {
+    return fail(`Rozprawa musi zaczac sie od TrialFiled, a nie ${event.type}`);
+  }
+  return fileTrial({ type: "TrialFiled", trialId: event.trialId, cvText: "", jobOffer: "", debateRounds: event.debateRounds });
+}
+
+export function evolvePublic(state: TrialState, event: PublicTrialEvent): TrialState {
+  if (event.type === "TrialFiled") return fail("Rozprawa juz zostala wniesiona");
+  return step(state, event, false);
+}
+
+function step(state: TrialState, event: TrialEvent, checkQuotes: boolean): TrialState {
   if (state.phase === "closed" || state.phase === "aborted") {
     return fail(`Rozprawa jest zakonczona (${state.phase}), odrzucono ${event.type}`);
   }
@@ -77,7 +98,7 @@ export function evolve(state: TrialState, event: TrialEvent): TrialState {
     case "TrialAborted":
       return { ...state, phase: "aborted", abortReason: event.reason };
     case "AssessmentSubmitted":
-      return submitAssessment(state, event.assessment);
+      return submitAssessment(state, event.assessment, checkQuotes);
     case "ProsecutionDelivered":
       return deliverProsecution(state, event.speech);
     case "StatementMade":
@@ -104,13 +125,13 @@ function requirePhase(state: TrialState, phase: Phase, action: string): void {
   }
 }
 
-function submitAssessment(state: TrialState, assessment: Assessment): TrialState {
+function submitAssessment(state: TrialState, assessment: Assessment, checkQuotes: boolean): TrialState {
   requirePhase(state, "assessing", "Ocena");
   const id = assessment.criticId;
   if (state.assessments.some((a) => a.criticId === id)) {
     return fail(`Krytyk ${id} juz zlozyl ocene`);
   }
-  const invented = findInventedQuotes(assessment, state.cvText);
+  const invented = checkQuotes ? findInventedQuotes(assessment, state.cvText) : [];
   if (invented.length > 0) {
     return fail(`Krytyk ${id} cytuje cos, czego nie ma w CV: ${invented.join(" | ")}`);
   }

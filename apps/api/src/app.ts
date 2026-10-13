@@ -1,6 +1,6 @@
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
-import { MAX_DEBATE_ROUNDS, replay } from "@trybunal/domain";
+import { MAX_DEBATE_ROUNDS, MAX_PDF_BYTES, replay } from "@trybunal/domain";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { z } from "zod";
 import type { TrialHub } from "./hub.js";
@@ -22,8 +22,6 @@ export interface AppOptions {
   /** Za proxy (Docker, nginx): adres klienta z X-Forwarded-For, inaczej wszyscy dziela jeden limit. */
   readonly trustProxy?: boolean;
 }
-
-export const MAX_PDF_BYTES = 2 * 1024 * 1024;
 
 const FileBody = z.object({
   cvText: z.string(),

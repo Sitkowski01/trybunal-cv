@@ -93,10 +93,18 @@ describe("zdarzenie publiczne", () => {
 
   it.each<[string, Record<string, unknown>]>([
     ["wniesienie z tekstem CV zamiast dlugosci", filed],
+    ["wniesienie z dlugosciami i tekstem CV", { ...toPublicEvent(filed), cvText: "CV z Java" }],
+    ["wniesienie z dlugosciami i oferta", { ...toPublicEvent(filed), jobOffer: "Oferta" }],
     ["ujemna dlugosc CV", { ...toPublicEvent(filed), cvChars: -1 }],
     ["ulamkowa dlugosc oferty", { ...toPublicEvent(filed), jobOfferChars: 1.5 }],
   ])("schemat publiczny odrzuca: %s", (_, event) => {
     expect(PublicTrialEventSchema.safeParse(event).success).toBe(false);
+  });
+
+  it("nieznany typ zdarzenia: blad wskazuje pole type w obu schematach", () => {
+    for (const schema of [TrialEventSchema, PublicTrialEventSchema]) {
+      expect(schema.safeParse({ type: "Nieznane" }).error?.issues.map((i) => i.path)).toEqual([["type"]]);
+    }
   });
 
   it("dlugosc zero jest poprawna (granica)", () => {

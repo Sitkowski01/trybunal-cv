@@ -6,6 +6,8 @@ import {
   announceVerdict,
   currentScores,
   evolve,
+  evolvePublic,
+  filePublicTrial,
   fileTrial,
   initialScores,
   nextSpeaker,
@@ -15,6 +17,7 @@ import {
   TrialRuleError,
 } from "./trial.js";
 import { deliberate, RULE_VERSION, type Scores, type Verdict } from "./verdict.js";
+import { toPublicEvent } from "./events.js";
 
 const filed = (debateRounds = 1): TrialEvent => ({
   type: "TrialFiled",
@@ -289,6 +292,32 @@ describe("werdykt i zakonczenie", () => {
   });
 });
 
+describe("rozprawa ze zdarzen publicznych", () => {
+  const publicFiled = toPublicEvent(filed());
+  const quoting: TrialEvent = {
+    type: "AssessmentSubmitted",
+    assessment: { ...assessment("ats"), concerns: [{ quote: "Nie ma tego w CV", issue: "x", severity: "low" }] },
+  };
+
+  it("cytatow nie sprawdza - nie zna CV; evolve z CV je odrzuca", () => {
+    const state = evolvePublic(filePublicTrial(publicFiled), toPublicEvent(quoting));
+    expect(state.assessments).toHaveLength(1);
+    expect(() => evolve(replay([filed()]), quoting)).toThrow(TrialRuleError);
+  });
+
+  it("pozostale reguly obowiazuja: kolejnosc, ponowne wniesienie, start nie od wniesienia", () => {
+    const state = filePublicTrial(publicFiled);
+    expect(() => evolvePublic(state, toPublicEvent(prosecution))).toThrow(/Mowa oskarzenia mozliwe w fazie prosecution/u);
+    expect(() => evolvePublic(state, publicFiled)).toThrow("Rozprawa juz zostala wniesiona");
+    expect(() => filePublicTrial(toPublicEvent(prosecution))).toThrow("Rozprawa musi zaczac sie od TrialFiled, a nie ProsecutionDelivered");
+    expect(() => filePublicTrial({ ...publicFiled, debateRounds: 4 } as never)).toThrow(/od 0 do 3/u);
+  });
+
+  it("wniesienie publiczne: id i rundy, pusty tekst CV i oferty", () => {
+    expect(filePublicTrial(toPublicEvent(filed(2)))).toMatchObject({ trialId: "t-1", debateRounds: 2, cvText: "", jobOffer: "", phase: "assessing" });
+  });
+});
+
 describe("wlasnosci rozprawy", () => {
   const scoreArb = fc.integer({ min: 1, max: 10 });
   const trialArb = fc
@@ -323,6 +352,18 @@ describe("wlasnosci rozprawy", () => {
         const state = replay(events);
         expect(state.phase).toBe("closed");
         expect(state.verdict).toEqual(expected);
+      }),
+    );
+  });
+
+  it("zdarzenia publiczne, kazdy poczatek rozprawy: ten sam stan co replay, tylko bez CV i oferty", () => {
+    fc.assert(
+      fc.property(trialArb, fc.nat(), ({ events }, n) => {
+        const prefix = events.slice(0, 1 + (n % events.length));
+        const [first, ...rest] = prefix.map(toPublicEvent);
+        if (first === undefined) return;
+        const followed = rest.reduce(evolvePublic, filePublicTrial(first));
+        expect(followed).toEqual({ ...replay(prefix), cvText: "", jobOffer: "" });
       }),
     );
   });
