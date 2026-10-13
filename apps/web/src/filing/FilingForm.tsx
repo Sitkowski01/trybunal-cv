@@ -2,6 +2,7 @@ import { MAX_DEBATE_ROUNDS, MAX_JOB_OFFER_CHARS } from "@trybunal/domain";
 import { type SubmitEvent, useId, useState } from "react";
 import { ApiError, type Filed, type FilingInput } from "../api/client.js";
 import { CvInput } from "./CvInput.js";
+import { EXAMPLE } from "./example.js";
 import { type CvMode, validate } from "./validate.js";
 
 export interface FilingFormProps {
@@ -32,6 +33,14 @@ export function FilingForm({ onFile, onFiled }: FilingFormProps) {
       setSending(false);
       setProblems(error instanceof ApiError ? [error.message, ...error.problems] : ["Nieoczekiwany błąd przy wnoszeniu sprawy."]);
     });
+  };
+
+  const loadExample = () => {
+    setCvMode("text");
+    setCvText(EXAMPLE.cv);
+    setJobOffer(EXAMPLE.offer);
+    setCandidateName(EXAMPLE.candidateName);
+    setProblems([]);
   };
 
   return (
@@ -98,6 +107,9 @@ export function FilingForm({ onFile, onFiled }: FilingFormProps) {
       )}
 
       <div className="filing__actions">
+        <button type="button" className="button--ghost" onClick={loadExample}>
+          Wczytaj przykład
+        </button>
         <button type="submit" disabled={sending}>
           {sending ? "Wnoszę sprawę…" : "Wnieś sprawę"}
         </button>
