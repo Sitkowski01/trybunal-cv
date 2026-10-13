@@ -293,3 +293,191 @@ select:focus-visible {
   transition: border-color 0.3s, transform 0.3s;
 }
 
+.critic--prosecutor {
+  border-top: 3px solid var(--reject);
+}
+
+.critic--thinking {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.critic--speaking {
+  border-color: var(--brass);
+  transform: translateY(-4px);
+  box-shadow: 0 6px 24px rgb(212 169 74 / 0.18);
+}
+
+.critic--listening {
+  opacity: 0.75;
+}
+
+@keyframes pulse {
+  50% {
+    border-color: var(--brass-dim);
+  }
+}
+
+.critic__head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.critic__emblem {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: 1px solid var(--brass-dim);
+  color: var(--brass);
+  font-size: 1.1rem;
+}
+
+.critic__name {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.critic__role {
+  margin: 0.15rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.critic__score {
+  font-family: var(--serif);
+  font-variant-numeric: tabular-nums;
+}
+
+.critic__value {
+  font-size: 2.4rem;
+  color: var(--brass);
+  font-weight: 600;
+}
+
+.critic__was {
+  color: var(--text-muted);
+  margin-right: 0.15rem;
+  text-decoration: line-through;
+}
+
+.critic__scale,
+.critic__pending {
+  color: var(--text-muted);
+}
+
+.critic__pending {
+  font-size: 2.4rem;
+}
+
+.critic__activity {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.critic__summary,
+.critic__statement {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.critic__statement {
+  border-left: 2px solid var(--brass-dim);
+  padding-left: 0.6rem;
+  font-style: italic;
+}
+
+.proceedings,
+.verdict,
+.report {
+  margin-top: 2rem;
+}
+
+.speech {
+  margin: 0;
+  background: var(--bg-raised);
+  border-left: 4px solid var(--reject);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.speech blockquote {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.15rem;
+}
+
+.speech figcaption,
+.report__meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.round ul {
+  padding-left: 1.2rem;
+}
+
+.round__revised {
+  color: var(--brass);
+}
+
+.verdict {
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  background: var(--bg-raised);
+}
+
+.verdict__stamp {
+  display: inline-block;
+  margin: 0 0 1rem;
+  padding: 0.3rem 1.2rem;
+  border: 4px double currentcolor;
+  border-radius: 6px;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  transform: rotate(-3deg);
+}
+
+.verdict--invite .verdict__stamp {
+  color: var(--invite);
+}
+
+.verdict--reject .verdict__stamp {
+  color: var(--reject);
+}
+
+.verdict__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.verdict__facts dt {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.verdict__facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.verdict__disputed {
+  color: var(--reject);
+}
+
+.verdict__justification {
+  margin: 1.25rem 0 0;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+}
+
