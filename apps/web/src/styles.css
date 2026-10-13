@@ -121,3 +121,175 @@ select:focus-visible {
   border-color: var(--reject);
 }
 
+/* Formularz wniesienia */
+.filing {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: 1.25rem;
+}
+
+.filing fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  padding: 1rem 1.25rem 1.25rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.filing legend {
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  color: var(--brass);
+  padding: 0 0.4rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.field > span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.field textarea,
+.field input[type="text"],
+.field select {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+}
+
+.field textarea {
+  resize: vertical;
+  font-size: 0.92rem;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.segmented label {
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.segmented label:has(input:checked) {
+  background: var(--brass);
+  color: #1b140e;
+  font-weight: 600;
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+}
+
+.segmented label:has(input:focus-visible) {
+  outline: 3px solid var(--brass);
+  outline-offset: -3px;
+}
+
+.filing__problems,
+.filing__actions {
+  grid-column: 1 / -1;
+}
+
+.filing__problems {
+  margin: 0;
+  padding-left: 2rem;
+}
+
+.filing__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* Sala rozpraw */
+.trial__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline__step {
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.timeline__step--done {
+  border-color: var(--brass-dim);
+  color: var(--brass);
+}
+
+.timeline__step--now {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: #1b140e;
+  font-weight: 600;
+}
+
+.timeline__step--stopped {
+  border-color: var(--reject);
+  color: var(--reject);
+  font-weight: 600;
+}
+
+.trial__cost {
+  margin: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.trial__status {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  margin: 1.25rem 0;
+}
+
+.bench {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr));
+  gap: 0.9rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.critic {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: border-color 0.3s, transform 0.3s;
+}
+
