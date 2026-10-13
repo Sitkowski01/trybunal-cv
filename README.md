@@ -15,6 +15,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 | `packages/llm` | klient modelu: adapter Claude, koszt i budżet, atrapa do testów, nagrania rozmów |
 | `packages/court` | orkiestracja rozprawy: prompty, oceny, debata, werdykt, ponowienia, CLI |
 | `apps/api` | serwer HTTP: wniesienie CV (tekst/PDF), anonimizacja, szyfrowany dziennik w Postgresie, strumień SSE |
+| `apps/web` | frontend (React, Vite): wniesienie sprawy, rozprawa na żywo, werdykt i poprawki CV jako diff |
 
 ## Jak działa rozprawa
 
@@ -95,8 +96,29 @@ Test na prawdziwym API uruchamia się tylko z kluczem:
   Usunięcie klucza rozprawy czyni treść nieczytelną, a koszty zostają do statystyk.
 - **Limity.** Długość pól, rozprawy naraz, budżet rozprawy i dnia (trwające rezerwują pełny
   budżet), liczba wniesień z jednego adresu na godzinę.
-- **Próba generalna** (`TRYBUNAL_REHEARSAL=1`): cała rozprawa bez modelu i bez klucza.
+- **Próba generalna** (`TRYBUNAL_REHEARSAL=1`): cała rozprawa bez modelu i bez klucza;
+  `TRYBUNAL_REHEARSAL_DELAY_MS` spowalnia odpowiedzi, żeby na ekranie było widać kolejne fazy.
 - Konfiguracja: `.env.example`. Bez `DATABASE_URL` dziennik jest w pamięci.
+
+## Frontend
+
+`apps/web` (React 19, Vite) pokazuje rozprawę na żywo: ławę pięciu krytyków (kto czyta akta,
+kto przemawia, ocena i zmiana zdania), protokół z mową oskarżenia i debatą, werdykt z progami
+reguły oraz uzasadnienie na piśmie — poprawki CV jako diff słowo po słowie.
+
+- **Stan sali to złożenie zdarzeń ze strumienia SSE.** Domena odtwarza rozprawę funkcją
+  `replay`, ale potrzebuje tekstu CV, który nie opuszcza serwera. Frontend ma własny, prosty
+  reduktor; test własności porównuje go z `replay` na losowych rozprawach i ich początkach.
+- **Jeden kontrakt zdarzeń.** Publiczna postać zdarzenia (wniesienie bez tekstu CV, tylko
+  długości) to schemat w domenie, używany przez serwer i przeglądarkę. Schemat jest ścisły:
+  zdarzenie z tekstem CV to błąd, a nie pole do cichego pominięcia.
+- **Wznawianie.** Przeglądarka wznawia zerwany strumień z `Last-Event-ID`; powtórzone
+  zdarzenia są pomijane po numerze. Id rozprawy jest w adresie, więc odświeżenie strony
+  odtwarza rozprawę od początku.
+- **Model bez widoku.** Stan sali i klient API to czysty TypeScript bez Reacta (reguła
+  dependency-cruiser) — scena 3D użyje ich bez zmian.
+- Dostępność: komunikat o fazie w `role="status"`, poprawki jako `<del>`/`<ins>`, oceny
+  z opisem dla czytnika, animacje wyłączone przy `prefers-reduced-motion`.
 
 ## Uruchomienie
 
@@ -119,6 +141,10 @@ pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend
 TRYBUNAL_REHEARSAL=1 pnpm api
 curl -X POST localhost:3000/trials -H 'content-type: application/json' -d '{"cvText":"Java, Spring","jobOffer":"Junior Java"}'
 curl -N localhost:3000/trials/<id>/events
+
+# Frontend (proxy /api -> localhost:3000), w drugim terminalu obok pnpm api:
+pnpm web        # http://localhost:5173
+pnpm e2e        # build + Playwright: API w próbie generalnej i zbudowany frontend
 ```
 
 ## Jakość
@@ -128,7 +154,9 @@ curl -N localhost:3000/trials/<id>/events
   optymalność diffu względem naiwnej rekurencji, idempotencja anonimizacji. Pokrycie min. 95%.
 - Testy integracyjne na prawdziwym Postgresie (Testcontainers) — ten sam kontrakt dziennika
   co implementacja w pamięci; SSE testowane na prawdziwym gnieździe.
+- Komponenty testowane w jsdom (Testing Library) z atrapą EventSource; e2e w Playwright na
+  prawdziwym API: PDF, odświeżenie w trakcie, anulowanie, zapomnienie rozprawy.
 - Mutation testing (Stryker), próg 90%.
 - Reguły architektury (dependency-cruiser): domena nie korzysta z IO ani z innych pakietów,
-  frontend nie zna warstwy LLM, brak cykli.
+  frontend nie zna warstwy LLM, stan sali nie zna Reacta, brak cykli.
 - Każdy commit ma maks. 200 linii zmian (hook `.githooks/pre-commit`).
