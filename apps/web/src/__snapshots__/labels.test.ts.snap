@@ -1,0 +1,77 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`etykiety > teksty interfejsu (zmiana tekstu widoczna w review jak zmiana kodu) 1`] = `
+{
+  "ACTIVITY_LABELS": {
+    "assessed": "ocenił",
+    "idle": "czeka",
+    "listening": "słucha",
+    "speaking": "przemawia",
+    "thinking": "czyta akta…",
+  },
+  "CRITIC_LABELS": {
+    "ats": {
+      "emblem": "⚙",
+      "name": "Bot ATS",
+      "role": "Słowa kluczowe i format, który przejdzie automatyczny filtr",
+    },
+    "hiringManager": {
+      "emblem": "◆",
+      "name": "Hiring Manager",
+      "role": "Wpływ pracy wyrażony liczbami",
+    },
+    "hr": {
+      "emblem": "◎",
+      "name": "HR screener",
+      "role": "Pierwsze 6 sekund: spójna ścieżka, luki, sygnały ostrzegawcze",
+    },
+    "prosecutor": {
+      "emblem": "⚖",
+      "name": "Prokurator",
+      "role": "Najmocniejszy powód, żeby odrzucić",
+    },
+    "techLead": {
+      "emblem": "⌘",
+      "name": "Tech Lead",
+      "role": "Czy umiejętności są potwierdzone projektami",
+    },
+  },
+  "PHASES": [
+    {
+      "label": "Oceny",
+      "phase": "assessing",
+    },
+    {
+      "label": "Oskarżenie",
+      "phase": "prosecution",
+    },
+    {
+      "label": "Debata",
+      "phase": "debate",
+    },
+    {
+      "label": "Narada",
+      "phase": "deliberation",
+    },
+    {
+      "label": "Werdykt",
+      "phase": "closed",
+    },
+  ],
+  "PII_LABELS": {
+    "birthDate": "data urodzenia",
+    "email": "e-mail",
+    "link": "link",
+    "name": "imię i nazwisko",
+    "pesel": "PESEL",
+    "phone": "telefon",
+    "postalCode": "kod pocztowy",
+    "street": "adres",
+  },
+  "SEVERITY_LABELS": {
+    "high": "poważne",
+    "low": "drobne",
+    "medium": "istotne",
+  },
+}
+`;
