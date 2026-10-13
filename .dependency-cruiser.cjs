@@ -35,6 +35,13 @@ module.exports = {
       to: { path: "^(packages/llm|apps/api)" },
     },
     {
+      name: "web-model-bez-widoku",
+      comment: "stan sali i klient API to czysty TS: bez Reacta i komponentow — uzyje ich tez scena 3D",
+      severity: "error",
+      from: { path: "^apps/web/src/(api/|trial/(court|seats|activity|envelope)\\.ts$)", pathNot: "\\.test\\.ts$" },
+      to: { path: "(node_modules/react/|\\.tsx$|useCourt)" },
+    },
+    {
       name: "pakiety-nie-znaja-aplikacji",
       comment: "biblioteki w packages/ nie importuja z apps/",
       severity: "error",
@@ -49,10 +56,10 @@ module.exports = {
     },
     {
       name: "produkcja-bez-testow",
-      comment: "kod produkcyjny nie importuje plikow testowych",
+      comment: "kod produkcyjny nie importuje plikow testowych ani pomocnikow testow (src/test/)",
       severity: "error",
-      from: { pathNot: "\\.test\\.ts$" },
-      to: { path: "\\.test\\.ts$" },
+      from: { pathNot: "(\\.test\\.tsx?$|/src/test/)" },
+      to: { path: "(\\.test\\.tsx?$|/src/test/)" },
     },
   ],
   options: {
