@@ -7,7 +7,7 @@ import { newKey, parseMasterKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
 import { Journal } from "./journal.js";
 import { migrate, PostgresEventStore } from "./postgres.js";
-import { rehearsalLlm } from "./rehearsal.js";
+import { rehearsalLlm, slowRehearsalLlm } from "./rehearsal.js";
 import { TrialService } from "./service.js";
 import { InMemoryEventStore } from "./store.js";
 
@@ -33,7 +33,8 @@ if (config.DATABASE_URL === undefined) {
 }
 
 const apiKey = config.ANTHROPIC_API_KEY;
-const llm = config.TRYBUNAL_REHEARSAL || apiKey === undefined ? rehearsalLlm : () => AnthropicLlmClient.fromApiKey(apiKey);
+const rehearsal = config.TRYBUNAL_REHEARSAL_DELAY_MS > 0 ? slowRehearsalLlm(config.TRYBUNAL_REHEARSAL_DELAY_MS) : rehearsalLlm;
+const llm = config.TRYBUNAL_REHEARSAL || apiKey === undefined ? rehearsal : () => AnthropicLlmClient.fromApiKey(apiKey);
 const hub = new TrialHub((error) => {
   console.error("Blad sluchacza strumienia:", error);
 });

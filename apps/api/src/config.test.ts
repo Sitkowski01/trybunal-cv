@@ -7,6 +7,7 @@ describe("readConfig", () => {
       PORT: 3000,
       HOST: "127.0.0.1",
       TRYBUNAL_REHEARSAL: true,
+      TRYBUNAL_REHEARSAL_DELAY_MS: 0,
       TRIAL_BUDGET_USD: 0.5,
       DAILY_BUDGET_USD: 5,
       MAX_RUNNING_TRIALS: 3,
@@ -30,8 +31,14 @@ describe("readConfig", () => {
     [{ ANTHROPIC_API_KEY: "sk", PORT: "70000" }, "PORT: "],
     [{ ANTHROPIC_API_KEY: "sk", DAILY_BUDGET_USD: "-1" }, "DAILY_BUDGET_USD: "],
     [{ ANTHROPIC_API_KEY: "sk", TRYBUNAL_REHEARSAL: "tak" }, "TRYBUNAL_REHEARSAL: "],
+    [{ TRYBUNAL_REHEARSAL: "1", TRYBUNAL_REHEARSAL_DELAY_MS: "10001" }, "TRYBUNAL_REHEARSAL_DELAY_MS: "],
+    [{ TRYBUNAL_REHEARSAL: "1", TRYBUNAL_REHEARSAL_DELAY_MS: "-1" }, "TRYBUNAL_REHEARSAL_DELAY_MS: "],
   ])("bledna konfiguracja zatrzymuje start z nazwa zmiennej (%#)", (env, message) => {
     expect(() => readConfig(env)).toThrow(`Bledna konfiguracja serwera:\n  ${message}`);
+  });
+
+  it("przerwa proby generalnej: granica 10 s dopuszczona", () => {
+    expect(readConfig({ TRYBUNAL_REHEARSAL: "1", TRYBUNAL_REHEARSAL_DELAY_MS: "10000" }).TRYBUNAL_REHEARSAL_DELAY_MS).toBe(10_000);
   });
 
   it("budzet w dolarach na nano-dolary jak w warstwie LLM", () => {

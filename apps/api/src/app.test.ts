@@ -127,7 +127,11 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
     const state = (await app.inject({ url: "/trials/t-1" })).json<Record<string, unknown>>();
     expect(state).toMatchObject({ trialId: "t-1", phase: "closed", running: false, verdict: { decision: "invite" } });
     expect(state.lastSeq).toBe(13);
-    expect(JSON.stringify(state)).not.toContain("Java, Spring");
+    expect(state).not.toHaveProperty("cvText");
+    expect(state).not.toHaveProperty("jobOffer");
+    // Cytaty krytykow to fragmenty CV (tak jak u prawdziwego modelu), ale oferta nie wraca wcale.
+    expect(JSON.stringify(state)).not.toContain(body.jobOffer);
+    expect(JSON.stringify(state)).not.toContain("Anna Nowak");
   });
 
   it("nieznana rozprawa -> 404 na kazdym adresie", async () => {

@@ -19,6 +19,8 @@ const EnvSchema = z
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     /** 1: rozprawy bez modelu (proba generalna) — demo, frontend, e2e. */
     TRYBUNAL_REHEARSAL: flag.default(false),
+    /** Przerwa przed kazda odpowiedzia proby generalnej — zeby w demo bylo widac kolejne fazy. */
+    TRYBUNAL_REHEARSAL_DELAY_MS: z.coerce.number().int().min(0).max(10_000).default(0),
     TRIAL_BUDGET_USD: usd.default(0.5),
     DAILY_BUDGET_USD: usd.default(5),
     MAX_RUNNING_TRIALS: z.coerce.number().int().positive().default(3),
