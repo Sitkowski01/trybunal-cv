@@ -8,3 +8,5 @@ reports/
 .env.*
 !.env.example
 out/
+test-results/
+playwright-report/

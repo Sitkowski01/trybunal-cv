@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "pnpm typecheck && vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e",
     "test": "vitest run --coverage",
-    "mutation": "stryker run"
+    "mutation": "stryker run",
+    "e2e": "playwright test -c e2e"
   },
   "dependencies": {
     "@trybunal/domain": "workspace:*",

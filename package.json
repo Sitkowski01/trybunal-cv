@@ -15,7 +15,9 @@
     "mutation": "pnpm build && pnpm -r --workspace-concurrency=1 mutation",
     "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test",
     "trial": "node packages/court/dist/bin.js",
-    "api": "node apps/api/dist/main.js"
+    "api": "node apps/api/dist/main.js",
+    "web": "pnpm --filter @trybunal/web dev",
+    "e2e": "pnpm build && pnpm --filter @trybunal/web e2e"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
