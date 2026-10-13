@@ -1,18 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { toPublicEvent } from "@trybunal/domain";
 import type { TrialHub } from "./hub.js";
 import type { EventEnvelope, Journal } from "./journal.js";
 
 /** Zdarzenia, po ktorych rozprawa juz nic nie powie. */
 const TERMINAL = new Set(["VerdictAnnounced", "TrialAborted"]);
 
-/**
- * Zdarzenie do wyslania: wniesienie bez tekstu CV i oferty, tylko ich dlugosci. Kandydat je zna,
- * a strumien laduje w pamieci przegladarki, narzedziach deweloperskich i logach proxy.
- */
+/** Zdarzenie do wyslania: wniesienie bez tekstu CV i oferty (zob. toPublicEvent w domenie). */
 export function publicEvent(envelope: EventEnvelope) {
-  if (envelope.event.type !== "TrialFiled") return envelope;
-  const { cvText, jobOffer, ...rest } = envelope.event;
-  return { ...envelope, event: { ...rest, cvChars: cvText.length, jobOfferChars: jobOffer.length } };
+  return envelope.event.type === "TrialFiled" ? { ...envelope, event: toPublicEvent(envelope.event) } : envelope;
 }
 
 /** Jedno zdarzenie SSE: id = numer zdarzenia, zeby przegladarka wznowila od niego (Last-Event-ID). */

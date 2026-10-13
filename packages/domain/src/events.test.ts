@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CRITIC_IDS } from "./critics.js";
-import { MAX_CV_CHARS, type TrialEvent, TrialEventSchema } from "./events.js";
+import { MAX_CV_CHARS, PublicTrialEventSchema, type TrialEvent, TrialEventSchema, toPublicEvent } from "./events.js";
 import { announceVerdict, replay } from "./trial.js";
 
 const filed: TrialEvent = { type: "TrialFiled", trialId: "t-1", cvText: "CV z Java", jobOffer: "Oferta", debateRounds: 1 };
@@ -74,5 +74,32 @@ describe("TrialEventSchema", () => {
   it.each([-1, 1.5])("odrzuca wersje reguly %d", (ruleVersion) => {
     const verdict = fullTrial().at(-1) as TrialEvent;
     expect(parses({ ...verdict, ruleVersion })).toBe(false);
+  });
+});
+
+describe("zdarzenie publiczne", () => {
+  it("wniesienie traci tekst CV i oferty, zostaja ich dlugosci", () => {
+    const published = toPublicEvent(filed);
+    expect(published).toEqual({ type: "TrialFiled", trialId: "t-1", debateRounds: 1, cvChars: 9, jobOfferChars: 6 });
+    expect(JSON.stringify(published)).not.toContain("Java");
+  });
+
+  it("pozostale zdarzenia wychodza bez zmian i przechodza przez schemat publiczny", () => {
+    const events = fullTrial();
+    const published = events.map(toPublicEvent);
+    expect(published.slice(1)).toEqual(events.slice(1));
+    expect(published.map((e) => PublicTrialEventSchema.parse(JSON.parse(JSON.stringify(e))))).toEqual(published);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ["wniesienie z tekstem CV zamiast dlugosci", filed],
+    ["ujemna dlugosc CV", { ...toPublicEvent(filed), cvChars: -1 }],
+    ["ulamkowa dlugosc oferty", { ...toPublicEvent(filed), jobOfferChars: 1.5 }],
+  ])("schemat publiczny odrzuca: %s", (_, event) => {
+    expect(PublicTrialEventSchema.safeParse(event).success).toBe(false);
+  });
+
+  it("dlugosc zero jest poprawna (granica)", () => {
+    expect(PublicTrialEventSchema.safeParse({ ...toPublicEvent(filed), cvChars: 0, jobOfferChars: 0 }).success).toBe(true);
   });
 });

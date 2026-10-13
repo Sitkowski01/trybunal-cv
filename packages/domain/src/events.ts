@@ -25,14 +25,16 @@ export const VerdictSchema = z.object({
   mindChanges: z.array(z.object({ criticId: CriticIdSchema, from: ScoreSchema, to: ScoreSchema })).readonly(),
 }) satisfies z.ZodType<Verdict>;
 
-export const TrialEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("TrialFiled"),
-    trialId: boundedText(100),
-    cvText: boundedText(MAX_CV_CHARS),
-    jobOffer: boundedText(MAX_JOB_OFFER_CHARS),
-    debateRounds: z.number().int().min(0).max(MAX_DEBATE_ROUNDS),
-  }),
+const TrialFiledSchema = z.object({
+  type: z.literal("TrialFiled"),
+  trialId: boundedText(100),
+  cvText: boundedText(MAX_CV_CHARS),
+  jobOffer: boundedText(MAX_JOB_OFFER_CHARS),
+  debateRounds: z.number().int().min(0).max(MAX_DEBATE_ROUNDS),
+});
+
+/** Zdarzenia bez danych kandydata — te same w dzienniku i poza serwerem. */
+const PROCEEDINGS = [
   z.object({ type: z.literal("AssessmentSubmitted"), assessment: AssessmentSchema }),
   z.object({ type: z.literal("ProsecutionDelivered"), speech: boundedText(3000) }),
   z.object({
@@ -49,6 +51,29 @@ export const TrialEventSchema = z.discriminatedUnion("type", [
     justification: boundedText(3000),
   }),
   z.object({ type: z.literal("TrialAborted"), reason: boundedText(500) }),
-]);
+] as const;
+
+export const TrialEventSchema = z.discriminatedUnion("type", [TrialFiledSchema, ...PROCEEDINGS]);
 
 export type TrialEvent = z.infer<typeof TrialEventSchema>;
+
+/**
+ * Zdarzenie, ktore opuszcza serwer (strumien SSE, przegladarka): wniesienie bez tekstu CV
+ * i oferty, tylko ich dlugosci. Kandydat je zna, a strumien laduje w pamieci przegladarki,
+ * narzedziach deweloperskich i logach proxy. Jeden schemat dla serwera i frontendu.
+ */
+export const PublicTrialEventSchema = z.discriminatedUnion("type", [
+  TrialFiledSchema.omit({ cvText: true, jobOffer: true }).extend({
+    cvChars: z.number().int().min(0),
+    jobOfferChars: z.number().int().min(0),
+  }),
+  ...PROCEEDINGS,
+]);
+
+export type PublicTrialEvent = z.infer<typeof PublicTrialEventSchema>;
+
+export function toPublicEvent(event: TrialEvent): PublicTrialEvent {
+  if (event.type !== "TrialFiled") return event;
+  const { cvText, jobOffer, ...rest } = event;
+  return { ...rest, cvChars: cvText.length, jobOfferChars: jobOffer.length };
+}
