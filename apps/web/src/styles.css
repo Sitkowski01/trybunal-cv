@@ -1,0 +1,123 @@
+/* Sala rozpraw: ciemne drewno, mosiadz, pergamin dla dokumentow. Kolory jako tokeny. */
+:root {
+  --bg: #16110d;
+  --bg-raised: #221a14;
+  --bg-sunken: #100c09;
+  --line: #3b2f25;
+  --text: #efe6d8;
+  --text-muted: #b6a690;
+  --brass: #d4a94a;
+  --brass-dim: #8c6d2c;
+  --invite: #5fbf7f;
+  --reject: #e0655a;
+  --warn-bg: #3a1f16;
+  --paper: #f4ecdc;
+  --paper-text: #2a2119;
+  --paper-muted: #6d5e4c;
+  --ins: #cfe9cf;
+  --del: #f3d0cb;
+  --radius: 10px;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at top, #2a1f17 0%, var(--bg) 60%) fixed, var(--bg);
+  color: var(--text);
+  font: 16px/1.55 var(--sans);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--brass);
+  background: var(--brass);
+  color: #1b140e;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--brass);
+  outline-offset: 2px;
+}
+
+.button--ghost {
+  background: transparent;
+  color: var(--brass);
+}
+
+.button--danger {
+  background: transparent;
+  border-color: var(--reject);
+  color: var(--reject);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.masthead {
+  text-align: center;
+  padding: 2.5rem 1rem 1rem;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  color: var(--brass);
+  letter-spacing: 0.04em;
+}
+
+.masthead p {
+  margin: 0.5rem auto 0;
+  max-width: 40rem;
+  color: var(--text-muted);
+}
+
+.page {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 4rem;
+}
+
+.notice {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+
+.notice--warn {
+  background: var(--warn-bg);
+  border-color: var(--reject);
+}
+
