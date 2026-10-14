@@ -17,13 +17,15 @@ import { approach, type Pose, pose } from "./poses.js";
 export interface CourtSceneProps {
   readonly direction: Direction;
   readonly reducedMotion: boolean;
+  /** WebGL bez karty graficznej: bez cieni i w rozdzielczosci 1x, zeby procesor nadazal. */
+  readonly lowPower: boolean;
 }
 
 const url = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
 const VERDICT = { invite: "ZAPROSIĆ", reject: "ODRZUCIĆ" } as const;
 
-export default function CourtScene({ direction, reducedMotion }: CourtSceneProps) {
+export default function CourtScene({ direction, reducedMotion, lowPower }: CourtSceneProps) {
   const bubble = useRef<HTMLDivElement>(null);
   const { bubble: said, verdict } = direction;
   // Dymek to zwykly element DOM nad plotnem; co klatke przesuwamy go nad glowe mowcy.
@@ -36,9 +38,9 @@ export default function CourtScene({ direction, reducedMotion }: CourtSceneProps
   return (
     <div className="scene" data-shot={direction.shot} data-speaker={said?.who ?? ""} data-verdict={verdict ?? ""} aria-hidden="true">
       <Canvas
-        shadows="percentage"
+        shadows={lowPower ? false : "percentage"}
         flat
-        dpr={[1, 2]}
+        dpr={lowPower ? 1 : [1, 2]}
         camera={{ fov: 50, near: 0.1, far: 80 }}
         scene={{ environmentIntensity: 0.35 }}
         frameloop={reducedMotion ? "demand" : "always"}

@@ -5,8 +5,8 @@ import { full, setupPage as setup } from "../test/page.js";
 
 // Prawdziwa scena potrzebuje WebGL, ktorego jsdom nie ma; atrapa pokazuje, co dostala od strony.
 vi.mock("../scene/CourtScene.js", () => ({
-  default: ({ direction, reducedMotion }: CourtSceneProps) => (
-    <div data-testid="scene" data-shot={direction.shot} data-speaker={direction.bubble?.who ?? ""} data-verdict={direction.verdict ?? ""} data-still={String(reducedMotion)} />
+  default: ({ direction, reducedMotion, lowPower }: CourtSceneProps) => (
+    <div data-testid="scene" data-shot={direction.shot} data-speaker={direction.bubble?.who ?? ""} data-verdict={direction.verdict ?? ""} data-still={String(reducedMotion)} data-low={String(lowPower)} />
   ),
 }));
 
@@ -18,20 +18,23 @@ describe("sala 3D na stronie rozprawy", () => {
   });
 
   it("scena dostaje rezyserie ze strumienia: mowca w debacie, potem werdykt", async () => {
-    const { send } = setup(undefined, null, { reducedMotion: false });
+    const { send } = setup(undefined, null, { reducedMotion: false, lowPower: false });
     send(...full.slice(0, 8)); // wniesienie, 5 ocen, mowa, pierwsza wypowiedz (ATS)
     const scene = await screen.findByTestId("scene");
     expect(scene).toHaveAttribute("data-shot", "jury");
     expect(scene).toHaveAttribute("data-speaker", "ats");
     expect(scene).toHaveAttribute("data-still", "false");
+    expect(scene).toHaveAttribute("data-low", "false");
     send(...full.slice(8));
     expect(scene).toHaveAttribute("data-shot", "judge");
     expect(scene).toHaveAttribute("data-verdict", "invite");
   });
 
-  it("przelacznik chowa i pokazuje scene; tryb bez ruchu trafia do sceny", async () => {
-    const { user } = setup(undefined, null, { reducedMotion: true });
-    expect(await screen.findByTestId("scene")).toHaveAttribute("data-still", "true");
+  it("przelacznik chowa i pokazuje scene; tryb bez ruchu i oszczedny trafiaja do sceny", async () => {
+    const { user } = setup(undefined, null, { reducedMotion: true, lowPower: true });
+    const shown = await screen.findByTestId("scene");
+    expect(shown).toHaveAttribute("data-still", "true");
+    expect(shown).toHaveAttribute("data-low", "true");
     const toggle = screen.getByRole("button", { name: "Ukryj salę 3D" });
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     await user.click(toggle);

@@ -85,7 +85,7 @@ export function TrialPage({ trialId, api, sources, anonymized = null, onClose, s
           {showScene && (
             <SceneBoundary>
               <Suspense fallback={<p className="stage__loading">Wczytywanie sali…</p>}>
-                <CourtScene direction={direct(court)} reducedMotion={scene.reducedMotion} />
+                <CourtScene direction={direct(court)} reducedMotion={scene.reducedMotion} lowPower={scene.lowPower} />
               </Suspense>
             </SceneBoundary>
           )}
