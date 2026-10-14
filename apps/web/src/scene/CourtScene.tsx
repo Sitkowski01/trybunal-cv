@@ -1,10 +1,10 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { type RefObject, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { type Group, type Object3D, PMREMGenerator, Quaternion, Vector3 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { type GLTF, GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CHARACTER_IDS, type CharacterId, jointsOf, missingJoints, modelUrl } from "./characters.js";
-import { CAMERA_RATE, dampVec, type Vec3 } from "./camera.js";
+import { CAMERA_RATE, dampVec, toScreen, type Vec3 } from "./camera.js";
 import { COURTROOM_URL, isSeated, missingAnchors, type Shot, shotNodes, SPOTS } from "./courtroom.js";
 import type { Action, Direction } from "./direct.js";
 import { approach, type Pose, pose } from "./poses.js";
@@ -21,9 +21,20 @@ export interface CourtSceneProps {
 
 const url = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
+const VERDICT = { invite: "ZAPROSIĆ", reject: "ODRZUCIĆ" } as const;
+
 export default function CourtScene({ direction, reducedMotion }: CourtSceneProps) {
+  const bubble = useRef<HTMLDivElement>(null);
+  const { bubble: said, verdict } = direction;
+  // Dymek to zwykly element DOM nad plotnem; co klatke przesuwamy go nad glowe mowcy.
+  const placeBubble = useCallback((x: number, y: number, visible: boolean) => {
+    const element = bubble.current;
+    if (element === null) return;
+    element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
+    element.style.visibility = visible ? "visible" : "hidden";
+  }, []);
   return (
-    <div className="scene" data-shot={direction.shot} aria-hidden="true">
+    <div className="scene" data-shot={direction.shot} data-speaker={said?.who ?? ""} data-verdict={verdict ?? ""} aria-hidden="true">
       <Canvas
         shadows="percentage"
         flat
@@ -47,9 +58,16 @@ export default function CourtScene({ direction, reducedMotion }: CourtSceneProps
           shadow-bias={-0.0005}
         />
         <Suspense fallback={null}>
-          <Court direction={direction} still={reducedMotion} />
+          <Court direction={direction} still={reducedMotion} placeBubble={placeBubble} />
         </Suspense>
       </Canvas>
+      {said !== null && (
+        <div ref={bubble} className={`scene__bubble scene__bubble--${said.who}`}>
+          {said.text}
+          {said.revisedScore !== null && <strong className="scene__revised"> → {said.revisedScore}/10</strong>}
+        </div>
+      )}
+      {verdict !== null && <div className={`scene__verdict scene__verdict--${verdict}`}>{VERDICT[verdict]}</div>}
     </div>
   );
 }
@@ -72,7 +90,9 @@ function Environment() {
   return <primitive object={texture} attach="environment" />;
 }
 
-function Court({ direction, still }: { readonly direction: Direction; readonly still: boolean }) {
+type PlaceBubble = (x: number, y: number, visible: boolean) => void;
+
+function Court({ direction, still, placeBubble }: { readonly direction: Direction; readonly still: boolean; readonly placeBubble: PlaceBubble }) {
   const room = useLoader(GLTFLoader, url(COURTROOM_URL));
   const models = useLoader(
     GLTFLoader,
@@ -103,6 +123,8 @@ function Court({ direction, still }: { readonly direction: Direction; readonly s
     invalidate();
   }, [direction, invalidate]);
 
+  const heads = useRef(new Map<CharacterId, Object3D>());
+
   return (
     <>
       <primitive object={room.scene} />
@@ -114,9 +136,11 @@ function Court({ direction, still }: { readonly direction: Direction; readonly s
           spot={anchors(SPOTS[id])}
           action={direction.actions[id]}
           still={still}
+          heads={heads}
         />
       ))}
       <CameraRig shot={direction.shot} anchor={anchors} still={still} />
+      <BubbleTracker who={direction.bubble?.who ?? null} heads={heads} place={placeBubble} />
     </>
   );
 }
@@ -127,9 +151,11 @@ interface CharacterProps {
   readonly spot: Object3D;
   readonly action: Action;
   readonly still: boolean;
+  /** Glowy postaci — po nich ustawiamy dymek nad mowca. */
+  readonly heads: RefObject<Map<CharacterId, Object3D>>;
 }
 
-function Character({ id, gltf, spot, action, still }: CharacterProps) {
+function Character({ id, gltf, spot, action, still, heads }: CharacterProps) {
   const root = useRef<Group>(null);
   const joints = useMemo(() => {
     const names: string[] = [];
@@ -149,7 +175,8 @@ function Character({ id, gltf, spot, action, still }: CharacterProps) {
     // Wysokosc bioder liczona w ukladzie postaci — nie swiata, bo grupa juz stoi w swoim punkcie.
     const hips = gltf.scene.getObjectByName("hips") as Object3D;
     if (isSeated(id)) group.position.y += 0.1 - group.worldToLocal(hips.getWorldPosition(new Vector3())).y;
-  }, [gltf, id, spot]);
+    heads.current.set(id, gltf.scene.getObjectByName("head") as Object3D);
+  }, [gltf, id, spot, heads]);
 
   const since = useRef({ action, start: 0 });
   const current = useRef<Pose | null>(null);
@@ -187,6 +214,20 @@ function CameraRig({ shot, anchor, still }: { readonly shot: Shot; readonly anch
     current.current = { eye: dampVec(from.eye, goal.eye, CAMERA_RATE, step), target: dampVec(from.target, goal.target, CAMERA_RATE, step) };
     camera.position.set(...current.current.eye);
     camera.lookAt(...current.current.target);
+  });
+  return null;
+}
+
+const ABOVE_HEAD = new Vector3(0, 0.75, 0);
+
+function BubbleTracker({ who, heads, place }: { readonly who: CharacterId | null; readonly heads: RefObject<Map<CharacterId, Object3D>>; readonly place: PlaceBubble }) {
+  const { camera, size } = useThree();
+  useFrame(() => {
+    const head = who === null ? undefined : heads.current.get(who);
+    if (head === undefined) return;
+    const point = head.localToWorld(ABOVE_HEAD.clone()).project(camera);
+    const { x, y, visible } = toScreen([point.x, point.y, point.z], size.width, size.height);
+    place(x, y, visible);
   });
   return null;
 }
