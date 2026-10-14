@@ -146,7 +146,7 @@ def robot(cid, p, *, chest=None, pauldrons=True, backpack=True):
         block(f"thigh_{side}", hip, (0.17, 0.19, 0.24), (0, 0, -0.14), p.body, 0.035)
         knee = j[f"knee_{side}"] = pivot(f"knee_{side}", hip, (0, 0, -0.29))
         cyl(f"kneejoint_{side}", knee, 0.065, 0.15, (0, 0, 0), p.dark)
-        block(f"kneecap_{side}", knee, (0.12, 0.04, 0.09), (0, -0.09, 0.0), p.trim, 0.015)
+        block(f"kneecap_{side}", knee, (0.12, 0.04, 0.09), (0, -0.09, 0.0), p.dark, 0.015)
         block(f"shin_{side}", knee, (0.16, 0.18, 0.26), (0, 0, -0.16), p.body, 0.035)
         block(f"boot_{side}", knee, (0.21, 0.32, 0.1), (0, -0.05, -0.38), p.dark, 0.035)
         block(f"toecap_{side}", knee, (0.19, 0.08, 0.07), (0, -0.19, -0.385), p.accent, 0.02)
@@ -184,7 +184,7 @@ def robot(cid, p, *, chest=None, pauldrons=True, backpack=True):
         cyl(f"shoulderjoint_{side}", sh, 0.075, 0.12, (0, 0, 0), p.dark)
         if pauldrons:
             block(f"pauldron_{side}", sh, (0.2, 0.26, 0.11), (sx * 0.03, 0, 0.06), p.body, 0.045)
-        block(f"upperarm_{side}", sh, (0.12, 0.13, 0.2), (0, 0, -0.12), p.trim, 0.03)
+        block(f"upperarm_{side}", sh, (0.12, 0.13, 0.2), (0, 0, -0.12), p.dark, 0.03)
         el = j[f"elbow_{side}"] = pivot(f"elbow_{side}", sh, (0, 0, -0.24))
         cyl(f"elbowjoint_{side}", el, 0.06, 0.13, (0, 0, 0), p.dark)
         block(f"forearm_{side}", el, (0.15, 0.16, 0.2), (0, 0, -0.12), p.body, 0.04)
@@ -329,20 +329,19 @@ def build_hiring_manager():
     mouth(j["head"], p, w=0.11, z=0.135, smile=0.008)
     # Fryzura z przedzialkiem — zeby z daleka nie mylil sie z innymi robotami.
     hair = mat("hiringManager_hair", (0.18, 0.12, 0.08), rough=0.6)
-    block("hair", j["head"], (0.53, 0.45, 0.06), (0, 0.01, 0.41), hair, 0.03)
-    block("hairback", j["head"], (0.53, 0.08, 0.2), (0, 0.2, 0.33), hair, 0.03)
-    for side, sx in (("L", 1), ("R", -1)):
-        block(f"hairside_{side}", j["head"], (0.04, 0.34, 0.14), (sx * 0.255, 0.04, 0.35), hair, 0.015)
+    # Wlosy przylegaja do czaszki: czapa z duzym zaokragleniem i tyl.
+    block("hair", j["head"], (0.51, 0.44, 0.1), (0, 0.01, 0.4), hair, 0.05)
+    block("hairback", j["head"], (0.51, 0.07, 0.22), (0, 0.19, 0.3), hair, 0.035)
     # Przedzialek z lewej, grzywka zaczesana w prawo i lekko uniesiona.
-    block("quiff", j["head"], (0.36, 0.16, 0.07), (-0.07, -0.13, 0.445), hair, 0.03, rot=(r(-10), r(-6), 0))
+    block("quiff", j["head"], (0.34, 0.14, 0.08), (-0.06, -0.15, 0.44), hair, 0.035, rot=(r(-12), r(-6), 0))
     block("parting", j["head"], (0.015, 0.3, 0.012), (0.12, -0.02, 0.442), mat("hiringManager_parting", (0.1, 0.07, 0.05)), 0)
     # Teczka w prawej dloni.
     leather = mat("hiringManager_case", (0.36, 0.2, 0.1), rough=0.55)
     el = j["elbow_R"]
-    block("briefcase", el, (0.1, 0.38, 0.27), (0, -0.02, -0.5), leather, 0.03)
-    block("casehandle", el, (0.03, 0.14, 0.04), (0, -0.02, -0.35), leather, 0.01)
+    block("briefcase", el, (0.09, 0.32, 0.23), (0, -0.02, -0.48), leather, 0.03)
+    block("casehandle", el, (0.03, 0.12, 0.04), (0, -0.02, -0.345), leather, 0.01)
     for side, sy in (("a", 1), ("b", -1)):
-        block(f"caselatch_{side}", el, (0.105, 0.04, 0.03), (0, -0.02 + sy * 0.1, -0.41), p.accent, 0.006)
+        block(f"caselatch_{side}", el, (0.095, 0.04, 0.03), (0, -0.02 + sy * 0.09, -0.39), p.accent, 0.006)
     return root
 
 
@@ -370,13 +369,13 @@ def build_judge():
         block("eagle", spine, (0.05, 0.012, 0.055), (0, -0.26, 0.24), mat("judge_eagle", (0.95, 0.95, 0.95), rough=0.4), 0.006)
 
     root, j = robot("judge", p, chest=chest, pauldrons=False, backpack=False)
-    # Toga zaslania tez ramiona; fioletowy mankiet na koncu rekawa.
+    # Toga zaslania tez ramiona; rekaw rozszerza sie od lokcia, z fioletowym mankietem.
     for side, sx in (("L", 1), ("R", -1)):
         sh = j[f"shoulder_{side}"]
-        block(f"sleeve_{side}", sh, (0.24, 0.27, 0.36), (sx * 0.01, 0, -0.07), robe, 0.07)
+        block(f"sleeve_{side}", sh, (0.21, 0.23, 0.32), (sx * 0.01, 0, -0.08), robe, 0.05)
         el = j[f"elbow_{side}"]
-        block(f"sleevelower_{side}", el, (0.22, 0.24, 0.2), (0, 0, -0.1), robe, 0.06)
-        block(f"sleevecuff_{side}", el, (0.23, 0.25, 0.05), (0, 0, -0.2), purple, 0.02)
+        block(f"sleevelower_{side}", el, (0.27, 0.29, 0.2), (0, 0, -0.11), robe, 0.04)
+        block(f"sleevecuff_{side}", el, (0.28, 0.3, 0.05), (0, 0, -0.21), purple, 0.02)
     eyes_pair(j["head"], p, w=0.08, h=0.05, gap=0.09, z=0.21)
     for side, sx in (("L", 1), ("R", -1)):
         block(f"brow_{side}", j["head"], (0.1, 0.012, 0.02), (sx * 0.09, FACE_Y - 0.012, 0.26), p.eye, 0.005, rot=(0, sx * r(14), 0))
@@ -435,12 +434,15 @@ def build_prosecutor():
 
     # Tulow w todze, brzuch w luskach, czerwony zabot prokuratora.
     spine = pivot("spine", hips, (0, 0, 0.09))
-    block("robe", spine, (0.64, 0.5, 0.84), (0, 0.02, 0.11), robe, 0.08)
+    # Toga rozpieta z przodu: dwie poly, a miedzy nimi brzuch w luskach.
+    block("robe", spine, (0.64, 0.38, 0.84), (0, 0.08, 0.11), robe, 0.08)
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"robeflap_{side}", spine, (0.21, 0.14, 0.84), (sx * 0.215, -0.16, 0.11), robe, 0.05)
     block("collar", spine, (0.44, 0.42, 0.06), (0, 0.0, 0.52), red, 0.025)
-    block("belly", spine, (0.26, 0.03, 0.42), (0, -0.24, 0.2), belly, 0.02)
-    for i in range(4):
-        block(f"bellyplate_{i}", spine, (0.22, 0.02, 0.012), (0, -0.257, 0.06 + i * 0.09), mat(f"{cid}_bellyline", (0.75, 0.6, 0.3), rough=0.7), 0)
-    block("jabot", spine, (0.14, 0.04, 0.17), (0, -0.262, 0.42), red, 0.02)
+    block("belly", spine, (0.22, 0.1, 0.8), (0, -0.15, 0.1), belly, 0.03)
+    for i in range(6):
+        block(f"bellyplate_{i}", spine, (0.2, 0.012, 0.014), (0, -0.202, -0.2 + i * 0.1), mat(f"{cid}_bellyline", (0.75, 0.6, 0.3), rough=0.7), 0)
+    block("jabot", spine, (0.14, 0.04, 0.17), (0, -0.24, 0.42), red, 0.02)
     # Kolce wzdluz grzbietu.
     for i, (z, h) in enumerate(((0.5, 0.14), (0.38, 0.17), (0.24, 0.15), (0.1, 0.12))):
         spike(f"backspike_{i}", spine, 0.05, h, (0, 0.27 + h / 2 - 0.03, z), horn, rot=(r(-80), 0, 0))
@@ -528,7 +530,9 @@ def merge_per_pivot(root):
     z obiektu aktywnego. Pivoty zostaja nietkniete, wiec kontrakt stawow sie nie zmienia.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    meshes = [o for o in root.children_recursive if o.type == "MESH"]
+    # Kolejnosc po nazwie: children_recursive zalezy od pamieci, a od kolejnosci laczenia zalezy
+    # uklad wierzcholkow — bez sortowania kazdy eksport dawalby inny plik .glb.
+    meshes = sorted((o for o in root.children_recursive if o.type == "MESH"), key=lambda o: o.name)
     for o in meshes:
         baked = bpy.data.meshes.new_from_object(o.evaluated_get(depsgraph))
         o.modifiers.clear()
@@ -543,7 +547,7 @@ def merge_per_pivot(root):
         bpy.context.view_layer.objects.active = parts[0]
         if len(parts) > 1:
             bpy.ops.object.join()
-        parts[0].name = f"{parent.name}_mesh"
+        parts[0].name = parts[0].data.name = f"{parent.name}_mesh"
 
 
 def export(root, path):
@@ -551,7 +555,11 @@ def export(root, path):
     bpy.ops.object.select_all(action="DESELECT")
     for o in [root, *root.children_recursive]:
         o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_extras=True, export_yup=True)
+    bpy.ops.export_scene.gltf(
+        filepath=path,
+        export_format="GLB", use_selection=True, export_apply=True, export_extras=True, export_yup=True,
+        export_texcoords=False,  # bez tekstur; UV po fazowaniu bywaja rozne miedzy uruchomieniami
+    )
 
 
 def studio(path, *, size=(1400, 560), cam_loc=(0, -7.5, 1.6), cam_rot=(84, 0, 0), lens=50):
