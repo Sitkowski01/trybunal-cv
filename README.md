@@ -18,7 +18,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 | `packages/court` | orkiestracja rozprawy: prompty, oceny, debata, werdykt, ponowienia, CLI |
 | `apps/api` | serwer HTTP: wniesienie CV (tekst/PDF), anonimizacja, szyfrowany dziennik w Postgresie, strumień SSE |
 | `apps/web` | frontend (React, Vite): wniesienie sprawy, rozprawa na żywo, werdykt i poprawki CV jako diff |
-| `assets/blender` | generator postaci 3D (Python w Blenderze) → modele `.glb` w `apps/web/public/models` |
+| `assets/blender` | generatory postaci i sali sądowej 3D (Python w Blenderze) → modele `.glb` w `apps/web/public/models` |
 
 ## Jak działa rozprawa
 
@@ -144,6 +144,24 @@ i rekwizyt, żeby była czytelna z drugiego końca sali.
 blender --background --python assets/blender/build_characters.py   # modele + podgląd
 ```
 
+## Sala 3D
+
+Nad ławą krytyków rozprawa toczy się w sali sądowej (React Three Fiber): przysięgli czytają
+akta, smok-prokurator wskazuje ławę, kamera jedzie do mówcy, nad głową pojawia się dymek,
+a sędzia kończy uderzeniem młotka i tabliczką ZAPROSIĆ / ODRZUCIĆ.
+
+![Mowa oskarżenia: kamera na prokuratorze, dymek z wypowiedzią](docs/sala.png)
+
+- **Reżyser jako czysta funkcja.** `direct(court)` liczy z tych samych zdarzeń co widok 2D,
+  co robi każda postać, gdzie stoi kamera i czyj jest dymek. Komponent 3D tylko to wyświetla.
+- **Animacje proceduralne.** `pose(postać, akcja, czas)` zwraca kąty stawów; zmiana akcji
+  przechodzi płynnie (wygładzanie wykładnicze, niezależne od liczby klatek). Tabela póz
+  w snapshocie pokazuje w review każdą zmianę animacji.
+- **Kontrakt z Blenderem.** Miejsca postaci i ujęcia kamery to puste węzły w `courtroom.glb`
+  (`assets/blender/build_courtroom.py`); testy sprawdzają, że plik je ma.
+- **Bez WebGL 2 albo przy awarii** zostaje widok 2D; `prefers-reduced-motion` wyłącza ruch
+  (kamera przeskakuje, klatka rysuje się tylko po zmianie). three.js doczytuje się leniwie.
+
 ## Uruchomienie
 
 Wymagania: Node 24, pnpm 11.
@@ -179,7 +197,8 @@ pnpm e2e        # build + Playwright: API w próbie generalnej i zbudowany front
 - Testy integracyjne na prawdziwym Postgresie (Testcontainers) — ten sam kontrakt dziennika
   co implementacja w pamięci; SSE testowane na prawdziwym gnieździe.
 - Komponenty testowane w jsdom (Testing Library) z atrapą EventSource; e2e w Playwright na
-  prawdziwym API: PDF, odświeżenie w trakcie, anulowanie, zapomnienie rozprawy.
+  prawdziwym API: PDF, odświeżenie w trakcie, anulowanie, zapomnienie rozprawy, sala 3D
+  w przeglądarce z WebGL (ujęcia, dymki, werdykt, tryb bez ruchu).
 - Mutation testing (Stryker), próg 90%.
 - Reguły architektury (dependency-cruiser): domena nie korzysta z IO ani z innych pakietów,
   frontend nie zna warstwy LLM, stan sali nie zna Reacta, brak cykli.
