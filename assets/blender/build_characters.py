@@ -244,8 +244,74 @@ def build_ats():
     return root
 
 
+def build_hr():
+    # HR screener: przyjazne okragle oczy, usmiech, rumience i podkladka z formularzem.
+    p = Palette("hr", (0.93, 0.52, 0.46), (0.98, 0.9, 0.82), (0.32, 0.2, 0.26), (0.98, 0.78, 0.35), (0.55, 0.95, 1.0))
+    def chest(spine, p):
+        block("heartplate", spine, (0.26, 0.03, 0.2), (0, -0.19, 0.34), p.dark, 0.02)
+        heart = mat("hr_heart", (1.0, 0.3, 0.45), emit=(1.0, 0.25, 0.42), strength=1.2)
+        pixels("heart", spine, [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."], 0.025, (0, 0.34), -0.207, heart)
+
+    root, j = robot("hr", p, chest=chest)
+    eyes_pair(j["head"], p, w=0.075, h=0.085, gap=0.085, z=0.23)
+    mouth(j["head"], p, w=0.12, z=0.14, smile=0.025)
+    blush = mat("hr_blush", (1.0, 0.45, 0.55), emit=(1.0, 0.35, 0.5), strength=1.5)
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"blush_{side}", j["head"], (0.05, 0.01, 0.022), (sx * 0.14, FACE_Y - 0.01, 0.16), blush, 0.006)
+    # Lewa reka trzyma podkladke przed soba.
+    board = mat("hr_board", (0.5, 0.32, 0.18), rough=0.7)
+    paper = mat("hr_paper", (0.97, 0.97, 0.95), rough=0.85)
+    ink = mat("hr_ink", (0.25, 0.3, 0.4), rough=0.8)
+    el = j["elbow_L"]
+    block("clipboard", el, (0.03, 0.26, 0.32), (0.1, -0.06, -0.3), board, 0.012)
+    block("clip", el, (0.035, 0.08, 0.03), (0.1, -0.06, -0.14), mat("hr_clip", (0.75, 0.75, 0.78), metal=0.9, rough=0.3), 0.008)
+    block("form", el, (0.006, 0.22, 0.27), (0.117, -0.06, -0.31), paper, 0)
+    for i in range(5):
+        block(f"formline_{i}", el, (0.004, 0.16 - (i % 2) * 0.05, 0.012), (0.121, -0.06 + (i % 2) * 0.025, -0.22 - i * 0.045), ink, 0)
+    # Kokarda na glowie — czytelny znak HR z daleka.
+    bow = mat("hr_bow", (0.85, 0.2, 0.35), rough=0.45)
+    block("bowknot", j["head"], (0.06, 0.06, 0.06), (0.14, 0.02, 0.42), bow, 0.02)
+    for side, sx in (("a", 1), ("b", -1)):
+        block(f"bowloop_{side}", j["head"], (0.1, 0.05, 0.08), (0.14 + sx * 0.07, 0.02, 0.42), bow, 0.025, rot=(0, sx * r(20), 0))
+    return root
+
+
+def build_tech_lead():
+    # Tech Lead: ciemny, sceptyczny (jedna brew w gore), sluchawki i kubek kawy.
+    p = Palette("techLead", (0.24, 0.27, 0.33), (0.4, 0.44, 0.5), (0.1, 0.11, 0.13), (0.98, 0.5, 0.1), (1.0, 0.6, 0.18))
+
+    def chest(spine, p):
+        # Ekran na piersi z symbolem kodu.
+        block("chestbezel", spine, (0.34, 0.03, 0.2), (0, -0.19, 0.34), p.dark, 0.02)
+        block("chestscreen", spine, (0.3, 0.012, 0.16), (0, -0.203, 0.34), p.screen, 0.012)
+        pixels("code", spine, ["..X....X..X..", ".X.....X...X.", "X.....X.....X", ".X...X.....X.", "..X..X....X.."], 0.02, (0, 0.34), -0.211, p.eye)
+
+    root, j = robot("techLead", p, chest=chest)
+    eyes_pair(j["head"], p, w=0.085, h=0.05, gap=0.09, z=0.215)
+    block("brow_L", j["head"], (0.09, 0.012, 0.018), (0.09, FACE_Y - 0.012, 0.275), p.eye, 0.004, rot=(0, r(-12), 0))
+    block("brow_R", j["head"], (0.09, 0.012, 0.018), (-0.09, FACE_Y - 0.012, 0.265), p.eye, 0.004)
+    block("mouth", j["head"], (0.1, 0.012, 0.02), (0.02, FACE_Y - 0.012, 0.13), p.eye, 0.005, rot=(0, r(6), 0))
+    band = mat("techLead_band", (0.06, 0.06, 0.07), rough=0.4)
+    block("headband", j["head"], (0.6, 0.08, 0.05), (0, 0, 0.43), band, 0.02)
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"bandside_{side}", j["head"], (0.04, 0.08, 0.2), (sx * 0.285, 0, 0.34), band, 0.015)
+        cyl(f"earcup_{side}", j["head"], 0.1, 0.07, (sx * 0.29, 0, 0.2), band, verts=24)
+        cyl(f"earring_{side}", j["head"], 0.075, 0.075, (sx * 0.295, 0, 0.2), p.accent, verts=24)
+    cyl("mic", j["head"], 0.012, 0.2, (0.27, -0.12, 0.13), band, axis="Y", bevel=0)
+    block("mictip", j["head"], (0.04, 0.04, 0.04), (0.27, -0.22, 0.13), p.accent, 0.012)
+    # Kubek w prawej dloni.
+    mug = mat("techLead_mug", (0.95, 0.95, 0.93), rough=0.3)
+    el = j["elbow_R"]
+    cyl("mug", el, 0.06, 0.13, (0, -0.1, -0.29), mug, axis="Z", verts=24)
+    cyl("coffee", el, 0.052, 0.01, (0, -0.1, -0.222), mat("techLead_coffee", (0.25, 0.13, 0.06), rough=0.2), axis="Z", verts=24, bevel=0)
+    block("mughandle", el, (0.02, 0.04, 0.08), (0, -0.175, -0.29), mug, 0.01)
+    return root
+
+
 BUILDERS = {
     "ats": build_ats,
+    "hr": build_hr,
+    "techLead": build_tech_lead,
 }
 
 
