@@ -23,6 +23,8 @@ export default defineConfig({
   resolve: { alias: { "@examples": join(workspaceRoot(import.meta.dirname), "examples") } },
   // Modele postaci (public/models) — scena wczytuje je przez URL, testy jako ?inline.
   assetsInclude: ["**/*.glb"],
+  // Sala 3D (three.js) to osobna paczka ~1 MB doczytywana dopiero przy pokazaniu sceny.
+  build: { chunkSizeWarningLimit: 1100 },
   server: { proxy },
   preview: { proxy },
 });
