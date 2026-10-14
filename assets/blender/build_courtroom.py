@@ -111,14 +111,16 @@ def bench(root, p):
     """Podwyzszenie i lawa sedziowska z waga sprawiedliwosci, krzeslo sedziego, flagi i zegar."""
     g = pivot("bench", root, (0, 0, 0))
     rise = 0.6
+    # Blat na wysokosci lokci siedzacego sedziego: widac rece i mlotek, a nie tylko glowe.
+    DESK = 0.95
     block("platform", g, (5.0, 2.4, rise), (0, 5.8, rise / 2), p.wood_dark, 0.02)
     block("step", g, (3.0, 0.4, rise / 2), (0, 4.4, rise / 4), p.wood_dark, 0.02)
-    block("desk", g, (4.4, 0.5, 1.15), (0, 4.95, rise + 0.575), p.wood, 0.03)
-    block("desktop", g, (4.6, 0.7, 0.07), (0, 5.0, rise + 1.18), p.wood_dark, 0.02)
+    block("desk", g, (4.4, 0.5, DESK), (0, 5.05, rise + DESK / 2), p.wood, 0.03)
+    block("desktop", g, (4.6, 0.7, 0.07), (0, 5.15, rise + DESK + 0.03), p.wood_dark, 0.02)
     for k, x in enumerate((-1.5, 1.5)):
-        block(f"deskpanel_{k}", g, (1.0, 0.04, 0.7), (x, 4.69, rise + 0.6), p.wood_dark, 0.02)
-        block(f"deskpanelin_{k}", g, (0.84, 0.03, 0.54), (x, 4.675, rise + 0.6), p.wood, 0.015)
-    block("deskplaque", g, (1.2, 0.04, 0.8), (0, 4.685, rise + 0.6), p.wood_dark, 0.02)
+        block(f"deskpanel_{k}", g, (1.0, 0.04, 0.6), (x, 4.79, rise + 0.48), p.wood_dark, 0.02)
+        block(f"deskpanelin_{k}", g, (0.84, 0.03, 0.44), (x, 4.775, rise + 0.48), p.wood, 0.015)
+    block("deskplaque", g, (1.2, 0.04, 0.7), (0, 4.785, rise + 0.48), p.wood_dark, 0.02)
     # Waga sprawiedliwosci (piksel-art) na lawie.
     scales = [
         "......X......",
@@ -129,12 +131,12 @@ def bench(root, p):
         "......X......",
         "....XXXXX....",
     ]
-    pixels("scales", g, scales, 0.075, (0, rise + 0.62), 4.66, p.gold)
-    block("chairback", g, (0.9, 0.18, 1.6), (0, 6.15, rise + 0.95), p.leather, 0.06)
-    block("chairtop", g, (1.0, 0.24, 0.12), (0, 6.15, rise + 1.78), p.wood_dark, 0.03)
-    block("chairseat", g, (0.9, 0.8, 0.14), (0, 5.8, rise + 0.5), p.leather, 0.05)
+    pixels("scales", g, scales, 0.075, (0, rise + 0.5), 4.76, p.gold)
+    block("chairback", g, (0.9, 0.18, 1.6), (0, 6.2, rise + 0.95), p.leather, 0.06)
+    block("chairtop", g, (1.0, 0.24, 0.12), (0, 6.2, rise + 1.78), p.wood_dark, 0.03)
+    block("chairseat", g, (0.9, 0.8, 0.14), (0, 5.85, rise + 0.5), p.leather, 0.05)
     for side, sx in (("L", 1), ("R", -1)):
-        block(f"chairarm_{side}", g, (0.1, 0.7, 0.32), (sx * 0.5, 5.8, rise + 0.68), p.wood_dark, 0.02)
+        block(f"chairarm_{side}", g, (0.1, 0.7, 0.32), (sx * 0.5, 5.85, rise + 0.68), p.wood_dark, 0.02)
         cyl(f"pillar_{side}", g, 0.22, H - 0.3, (sx * 2.8, 6.6, (H - 0.3) / 2), p.marble, axis="Z", bevel=0, verts=24)
         block(f"pillarbase_{side}", g, (0.56, 0.56, 0.2), (sx * 2.8, 6.6, 0.1), p.marble, 0.02)
         block(f"pillarcap_{side}", g, (0.56, 0.56, 0.2), (sx * 2.8, 6.6, H - 0.4), p.marble, 0.02)
@@ -151,7 +153,7 @@ def bench(root, p):
     cyl("clockrim", g, 0.36, 0.05, (3.9, BACK - 0.03, 3.3), p.gold, axis="Y", verts=32)
     block("clockhand_h", g, (0.03, 0.02, 0.16), (3.9, BACK - 0.1, 3.36), p.ink, 0)
     block("clockhand_m", g, (0.22, 0.02, 0.025), (3.98, BACK - 0.1, 3.3), p.ink, 0)
-    pivot("judge_seat", root, (0, 5.8, rise + 0.57))
+    pivot("judge_seat", root, (0, 5.85, rise + 0.57))
 
 
 def jury_box(root, p):
@@ -180,11 +182,11 @@ def prosecution(root, p):
     """Miejsce oskarzyciela: mownica ze skosnym blatem, zwrocona do srodka sali."""
     g = pivot("prosecution", root, (3.4, 1.9, 0))
     g.rotation_euler = (0, 0, r(-55))
-    block("lectern", g, (0.8, 0.5, 1.05), (0, 0, 0.525), p.wood, 0.03)
-    block("lecterntop", g, (0.9, 0.6, 0.06), (0, 0.02, 1.1), p.wood_dark, 0.02, rot=(r(-15), 0, 0))
-    block("lecternband", g, (0.82, 0.52, 0.08), (0, 0, 0.85), p.red, 0.01)
+    block("lectern", g, (0.8, 0.5, 0.9), (0, 0, 0.45), p.wood, 0.03)
+    block("lecterntop", g, (0.9, 0.6, 0.06), (0, 0.02, 0.95), p.wood_dark, 0.02, rot=(r(-15), 0, 0))
+    block("lecternband", g, (0.82, 0.52, 0.08), (0, 0, 0.72), p.red, 0.01)
     block("lecternbase", g, (1.0, 0.7, 0.08), (0, 0, 0.04), p.wood_dark, 0.02)
-    block("notes", g, (0.36, 0.26, 0.012), (0, 0.0, 1.14), p.paper, 0, rot=(r(-15), 0, 0))
+    block("notes", g, (0.36, 0.26, 0.012), (0, 0.0, 0.99), p.paper, 0, rot=(r(-15), 0, 0))
     # Oskarzyciel stoi 0,8 m za mownica, patrzac tam gdzie ona (przod mownicy to obrocone -Y).
     stand = pivot("prosecutor_stand", root, (4.06, 2.36, 0))
     stand.rotation_euler = (0, 0, r(-55))
@@ -294,7 +296,7 @@ def cameras(root):
     """Ujecia kamery: punkt i cel. Scena przelacza je, gdy zmienia sie mowca."""
     shots = {
         "wide": ((0, -6.2, 3.7), (0, 2.6, 1.0)),
-        "judge": ((0, 1.2, 2.3), (0, 5.8, 2.0)),
+        "judge": ((0, 1.7, 2.9), (0, 5.85, 1.95)),
         "jury": ((0.4, -0.4, 2.0), (-4.75, 2.4, 1.4)),
         "prosecutor": ((-0.6, -0.6, 2.0), (4.06, 2.36, 1.6)),
         "table": ((0, -0.2, 2.1), (0, 2.0, 0.8)),
