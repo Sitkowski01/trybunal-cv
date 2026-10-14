@@ -1,7 +1,13 @@
 /** Fragment glTF potrzebny testom: wezly, siatki i ich prymitywy (jeden prymityw = jeden draw call). */
 export interface Gltf {
   readonly scenes: readonly { readonly nodes: readonly number[] }[];
-  readonly nodes: readonly { readonly name: string; readonly children?: readonly number[]; readonly mesh?: number; readonly extras?: Record<string, unknown> }[];
+  readonly nodes: readonly {
+    readonly name: string;
+    readonly children?: readonly number[];
+    readonly mesh?: number;
+    readonly translation?: readonly [number, number, number];
+    readonly extras?: Record<string, unknown>;
+  }[];
   readonly meshes: readonly { readonly primitives: readonly unknown[] }[];
 }
 
