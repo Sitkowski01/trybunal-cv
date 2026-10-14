@@ -7,6 +7,8 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 
 > Projekt w budowie.
 
+![Obsada trybunału: Bot ATS, HR, Tech Lead, Sędzia, Hiring Manager i smok-Prokurator](assets/blender/lineup.png)
+
 ## Struktura
 
 | Pakiet | Rola |
@@ -16,6 +18,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 | `packages/court` | orkiestracja rozprawy: prompty, oceny, debata, werdykt, ponowienia, CLI |
 | `apps/api` | serwer HTTP: wniesienie CV (tekst/PDF), anonimizacja, szyfrowany dziennik w Postgresie, strumień SSE |
 | `apps/web` | frontend (React, Vite): wniesienie sprawy, rozprawa na żywo, werdykt i poprawki CV jako diff |
+| `assets/blender` | generator postaci 3D (Python w Blenderze) → modele `.glb` w `apps/web/public/models` |
 
 ## Jak działa rozprawa
 
@@ -119,6 +122,27 @@ reguły oraz uzasadnienie na piśmie — poprawki CV jako diff słowo po słowie
   dependency-cruiser) — scena 3D użyje ich bez zmian.
 - Dostępność: komunikat o fazie w `role="status"`, poprawki jako `<del>`/`<ins>`, oceny
   z opisem dla czytnika, animacje wyłączone przy `prefers-reduced-motion`.
+
+## Postacie
+
+Czterech krytyków to roboty, Prokurator to smok, a Sędzia — większy robot w todze z fioletowym
+żabotem i łańcuchem. Każda postać ma własny kolor, mimikę na ekranie-twarzy, symbol na piersi
+i rekwizyt, żeby była czytelna z drugiego końca sali.
+
+![Pozy ustawione przez obrót stawów: młotek, paszcza, kubek, formularz](assets/blender/action.png)
+
+- **Modele ze skryptu, nie z klikania.** `assets/blender/build_characters.py` buduje postacie
+  z klocków i eksportuje je do glTF. Eksport jest deterministyczny (te same bajty przy każdym
+  uruchomieniu), więc zmiana modelu to czytelny diff skryptu.
+- **Stawy zamiast szkieletu.** Każdy staw to pusty węzeł (`hips`, `head`, `elbow_L`…, u smoka
+  też `jaw`, `tail`, `wing_L`). Scena obraca je w kodzie, bez klatek animacji.
+- **Kontrakt modeli.** Testy czytają prawdziwe pliki `.glb` i sprawdzają stawy, hierarchię
+  (łokieć pod barkiem, szczęka pod głową) oraz budżet: do 600 KB i 60 draw calli na postać —
+  klocki jednego stawu są przy eksporcie łączone w jedną siatkę.
+
+```bash
+blender --background --python assets/blender/build_characters.py   # modele + podgląd
+```
 
 ## Uruchomienie
 
