@@ -13,7 +13,9 @@ export default mergeConfig(
       coverage: {
         provider: "v8",
         include: ["src/**/*.{ts,tsx}"],
-        exclude: ["src/**/*.test.{ts,tsx}", "src/test/**", "src/main.tsx"],
+        // CourtScene.tsx rysuje WebGL, ktorego jsdom nie ma: logika sceny jest w czystych modulach z testami,
+        // a sam komponent sprawdza e2e w przegladarce (e2e/scene.spec.ts).
+        exclude: ["src/**/*.test.{ts,tsx}", "src/test/**", "src/main.tsx", "src/scene/CourtScene.tsx"],
         thresholds: { lines: 95, branches: 95, functions: 95, statements: 95 },
       },
     },
