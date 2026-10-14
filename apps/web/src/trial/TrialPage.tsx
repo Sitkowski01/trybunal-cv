@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { TrialApi } from "../api/client.js";
 import type { EventSourceFactory } from "../api/stream.js";
 import { formatUsd } from "../labels.js";
+import { direct } from "../scene/direct.js";
+import { SceneBoundary } from "../scene/SceneBoundary.js";
+import type { SceneSupport } from "../scene/support.js";
 import { Bench } from "./Bench.js";
 import { phaseOf } from "./court.js";
 import { narrate } from "./narrate.js";
@@ -13,6 +16,9 @@ import { TrialActions } from "./TrialActions.js";
 import { useCourt } from "./useCourt.js";
 import { VerdictPanel } from "./VerdictPanel.js";
 
+// three.js wazy wiecej niz reszta aplikacji — sala 3D doczytuje sie dopiero, gdy jest pokazywana.
+const CourtScene = lazy(() => import("../scene/CourtScene.js"));
+
 export interface TrialPageProps {
   readonly trialId: string;
   readonly api: TrialApi;
@@ -20,11 +26,14 @@ export interface TrialPageProps {
   /** Co serwer ukryl przy wniesieniu (tylko zaraz po wniesieniu — po odswiezeniu strony nie wiemy). */
   readonly anonymized?: string | null;
   readonly onClose: () => void;
+  /** null: przegladarka bez WebGL 2 — zostaje widok 2D. */
+  readonly scene?: SceneSupport | null;
 }
 
-export function TrialPage({ trialId, api, sources, anonymized = null, onClose }: TrialPageProps) {
+export function TrialPage({ trialId, api, sources, anonymized = null, onClose, scene = null }: TrialPageProps) {
   const { court, trouble } = useCourt(api.eventsUrl(trialId), sources);
   const [forgotten, setForgotten] = useState(false);
+  const [showScene, setShowScene] = useState(true);
   const trial = court.trial;
 
   if (forgotten) {
@@ -61,6 +70,27 @@ export function TrialPage({ trialId, api, sources, anonymized = null, onClose }:
       )}
       {anonymized !== null && <p className="notice">Przed rozprawą ukryto dane osobowe: {anonymized}.</p>}
 
+      {scene !== null && (
+        <section className="stage" aria-label="Sala rozpraw">
+          <button
+            type="button"
+            className="stage__toggle"
+            aria-pressed={showScene}
+            onClick={() => {
+              setShowScene((shown) => !shown);
+            }}
+          >
+            {showScene ? "Ukryj salę 3D" : "Pokaż salę 3D"}
+          </button>
+          {showScene && (
+            <SceneBoundary>
+              <Suspense fallback={<p className="stage__loading">Wczytywanie sali…</p>}>
+                <CourtScene direction={direct(court)} reducedMotion={scene.reducedMotion} />
+              </Suspense>
+            </SceneBoundary>
+          )}
+        </section>
+      )}
       <Bench court={court} />
       <Proceedings court={court} />
       {trial?.verdict != null && trial.justification !== null && <VerdictPanel verdict={trial.verdict} justification={trial.justification} />}

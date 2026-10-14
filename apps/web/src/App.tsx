@@ -3,6 +3,7 @@ import type { TrialApi } from "./api/client.js";
 import type { EventSourceFactory } from "./api/stream.js";
 import { FilingForm } from "./filing/FilingForm.js";
 import { describeAnonymized } from "./labels.js";
+import type { SceneSupport } from "./scene/support.js";
 import { TrialPage } from "./trial/TrialPage.js";
 
 /**
@@ -16,9 +17,11 @@ const trialFromUrl = () => new URLSearchParams(window.location.search).get(PARAM
 export interface AppProps {
   readonly api: TrialApi;
   readonly sources: EventSourceFactory;
+  /** Czy pokazac sale 3D (WebGL 2) i czy bez ruchu; null albo brak — tylko widok 2D. */
+  readonly scene?: SceneSupport | null;
 }
 
-export function App({ api, sources }: AppProps) {
+export function App({ api, sources, scene = null }: AppProps) {
   const [trialId, setTrialId] = useState(trialFromUrl);
   const [anonymized, setAnonymized] = useState<string | null>(null);
 
@@ -65,6 +68,7 @@ export function App({ api, sources }: AppProps) {
           api={api}
           sources={sources}
           anonymized={anonymized}
+          scene={scene}
           onClose={() => {
             navigate(null);
           }}

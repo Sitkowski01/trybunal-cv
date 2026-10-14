@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import type { TrialApi } from "../api/client.js";
+import type { SceneSupport } from "../scene/support.js";
 import { TrialPage } from "../trial/TrialPage.js";
 import { fakeSources } from "./sources.js";
 import { envelopes, trial } from "./trials.js";
@@ -23,10 +24,10 @@ export const full = envelopes(
   2_500_000,
 );
 
-export function setupPage(api = fakeApi(), anonymized: string | null = null) {
+export function setupPage(api = fakeApi(), anonymized: string | null = null, scene: SceneSupport | null = null) {
   const sources = fakeSources();
   const onClose = vi.fn();
-  const { unmount } = render(<TrialPage trialId="t-1" api={api} sources={sources.factory} anonymized={anonymized} onClose={onClose} />);
+  const { unmount } = render(<TrialPage trialId="t-1" api={api} sources={sources.factory} anonymized={anonymized} onClose={onClose} scene={scene} />);
   return { ...sources, api, onClose, unmount, user: userEvent.setup({ delay: null }) };
 }
 
