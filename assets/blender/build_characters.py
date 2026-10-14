@@ -5,7 +5,7 @@ wiec nie potrzebujemy szkieletu ani klatek animacji. Uruchomienie (z katalogu re
 
     blender --background --python assets/blender/build_characters.py
 
-Zapisuje apps/web/public/models/<id>.glb.
+Zapisuje apps/web/public/models/<id>.glb i podglad assets/blender/lineup.png.
 Przod postaci to -Y w Blenderze, czyli +Z w glTF (patrzy w strone domyslnej kamery three.js).
 """
 
@@ -518,7 +518,7 @@ BUILDERS = {
 }
 
 
-# ---------------------------------------------------------------- eksport
+# ---------------------------------------------------------------- eksport i podglad
 
 
 def merge_per_pivot(root):
@@ -554,11 +554,59 @@ def export(root, path):
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_extras=True, export_yup=True)
 
 
+def studio(path, *, size=(1400, 560), cam_loc=(0, -7.5, 1.6), cam_rot=(84, 0, 0), lens=50):
+    """Swiatlo trzypunktowe, podloga i kamera; render do pliku w kolorach jak w przegladarce."""
+    bpy.ops.mesh.primitive_plane_add(size=40)
+    bpy.context.active_object.name = "floor"
+    bpy.context.active_object.data.materials.append(mat("floor", (0.42, 0.3, 0.2), rough=0.75))
+    cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
+    bpy.context.collection.objects.link(cam)
+    cam.location = cam_loc
+    cam.rotation_euler = tuple(r(a) for a in cam_rot)
+    cam.data.lens = lens
+    for name, kind, energy, rot, loc in (
+        ("key", "SUN", 3.2, (50, 0, 35), (0, 0, 5)),
+        ("fill", "SUN", 1.0, (60, 0, -50), (0, 0, 5)),
+        ("rim", "SUN", 2.0, (60, 0, 170), (0, 0, 5)),
+    ):
+        light = bpy.data.objects.new(name, bpy.data.lights.new(name, kind))
+        bpy.context.collection.objects.link(light)
+        light.data.energy = energy
+        light.rotation_euler = tuple(r(a) for a in rot)
+        light.location = loc
+    scene = bpy.context.scene
+    scene.camera = cam
+    world = scene.world or bpy.data.worlds.new("world")
+    scene.world = world
+    world.use_nodes = True
+    bg = next(n for n in world.node_tree.nodes if n.type == "BACKGROUND")
+    bg.inputs[0].default_value = (0.62, 0.68, 0.78, 1)
+    bg.inputs[1].default_value = 0.6
+    scene.view_settings.view_transform = "Standard"
+    scene.render.resolution_x, scene.render.resolution_y = size
+    scene.render.filepath = path
+    bpy.ops.render.render(write_still=True)
+
+
+def render_lineup():
+    """Podglad wszystkich postaci obok siebie, wczytanych z gotowych plikow .glb."""
+    clear_scene()
+    order = ["ats", "hr", "techLead", "judge", "hiringManager", "prosecutor"]
+    for i, cid in enumerate(order):
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(MODELS, f"{cid}.glb"))
+        for o in set(bpy.data.objects) - before:
+            if o.parent is None:
+                o.location.x += (i - 2.5) * 1.15
+    studio(LINEUP, size=(1600, 640), cam_loc=(0, -10.5, 1.5), cam_rot=(86, 0, 0))
+
+
 def main():
     os.makedirs(MODELS, exist_ok=True)
     for cid, build in BUILDERS.items():
         clear_scene()
         export(build(), os.path.join(MODELS, f"{cid}.glb"))
+    render_lineup()
 
 
 if __name__ == "__main__":
