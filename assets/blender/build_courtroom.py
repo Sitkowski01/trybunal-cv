@@ -107,6 +107,109 @@ def walls(root, p):
         block(f"sconcelight_{side}", g, (0.12, 0.14, 0.14), (x - sx * 0.2, 2.0, 2.82), p.lamp, 0.03)
 
 
+def bench(root, p):
+    """Podwyzszenie i lawa sedziowska z waga sprawiedliwosci, krzeslo sedziego, flagi i zegar."""
+    g = pivot("bench", root, (0, 0, 0))
+    rise = 0.6
+    block("platform", g, (5.0, 2.4, rise), (0, 5.8, rise / 2), p.wood_dark, 0.02)
+    block("step", g, (3.0, 0.4, rise / 2), (0, 4.4, rise / 4), p.wood_dark, 0.02)
+    block("desk", g, (4.4, 0.5, 1.15), (0, 4.95, rise + 0.575), p.wood, 0.03)
+    block("desktop", g, (4.6, 0.7, 0.07), (0, 5.0, rise + 1.18), p.wood_dark, 0.02)
+    for k, x in enumerate((-1.5, 1.5)):
+        block(f"deskpanel_{k}", g, (1.0, 0.04, 0.7), (x, 4.69, rise + 0.6), p.wood_dark, 0.02)
+        block(f"deskpanelin_{k}", g, (0.84, 0.03, 0.54), (x, 4.675, rise + 0.6), p.wood, 0.015)
+    block("deskplaque", g, (1.2, 0.04, 0.8), (0, 4.685, rise + 0.6), p.wood_dark, 0.02)
+    # Waga sprawiedliwosci (piksel-art) na lawie.
+    scales = [
+        "......X......",
+        "..XXXXXXXXX..",
+        "..X...X...X..",
+        ".X.X..X..X.X.",
+        "XXXXX.X.XXXXX",
+        "......X......",
+        "....XXXXX....",
+    ]
+    pixels("scales", g, scales, 0.075, (0, rise + 0.62), 4.66, p.gold)
+    block("chairback", g, (0.9, 0.18, 1.6), (0, 6.15, rise + 0.95), p.leather, 0.06)
+    block("chairtop", g, (1.0, 0.24, 0.12), (0, 6.15, rise + 1.78), p.wood_dark, 0.03)
+    block("chairseat", g, (0.9, 0.8, 0.14), (0, 5.8, rise + 0.5), p.leather, 0.05)
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"chairarm_{side}", g, (0.1, 0.7, 0.32), (sx * 0.5, 5.8, rise + 0.68), p.wood_dark, 0.02)
+        cyl(f"pillar_{side}", g, 0.22, H - 0.3, (sx * 2.8, 6.6, (H - 0.3) / 2), p.marble, axis="Z", bevel=0, verts=24)
+        block(f"pillarbase_{side}", g, (0.56, 0.56, 0.2), (sx * 2.8, 6.6, 0.1), p.marble, 0.02)
+        block(f"pillarcap_{side}", g, (0.56, 0.56, 0.2), (sx * 2.8, 6.6, H - 0.4), p.marble, 0.02)
+        # Flaga bialo-czerwona na drzewcu.
+        cyl(f"flagpole_{side}", g, 0.025, 2.9, (sx * 2.0, 6.75, rise + 1.45), p.gold, axis="Z", bevel=0)
+        block(f"flagwhite_{side}", g, (0.04, 0.5, 0.36), (sx * 2.0, 6.5, rise + 2.45), p.white, 0.01)
+        block(f"flagred_{side}", g, (0.04, 0.5, 0.36), (sx * 2.0, 6.5, rise + 2.09), p.red, 0.01)
+        block(f"flagtip_{side}", g, (0.07, 0.07, 0.07), (sx * 2.0, 6.75, rise + 2.94), p.gold, 0.02)
+    # Tarcza z waga nad krzeslem i zegar.
+    block("plaque", g, (1.5, 0.08, 1.2), (0, BACK - 0.06, 3.3), p.wood_dark, 0.04)
+    block("plaquetrim", g, (1.6, 0.06, 1.3), (0, BACK - 0.03, 3.3), p.gold, 0.03)
+    pixels("plaquescales", g, scales, 0.11, (0, 3.3), BACK - 0.105, p.gold)
+    cyl("clockface", g, 0.32, 0.06, (3.9, BACK - 0.06, 3.3), p.white, axis="Y", verts=32)
+    cyl("clockrim", g, 0.36, 0.05, (3.9, BACK - 0.03, 3.3), p.gold, axis="Y", verts=32)
+    block("clockhand_h", g, (0.03, 0.02, 0.16), (3.9, BACK - 0.1, 3.36), p.ink, 0)
+    block("clockhand_m", g, (0.22, 0.02, 0.025), (3.98, BACK - 0.1, 3.3), p.ink, 0)
+    pivot("judge_seat", root, (0, 5.8, rise + 0.57))
+
+
+def jury_box(root, p):
+    """Lawa przysieglych: podest, cztery krzesla i balustrada z panelami."""
+    g = pivot("jury", root, (0, 0, 0))
+    rise = 0.3
+    block("juryplatform", g, (2.0, 4.0, rise), (-4.9, 2.4, rise / 2), p.wood_dark, 0.02)
+    block("juryrail", g, (0.14, 4.0, 0.9), (-3.95, 2.4, rise + 0.45), p.wood, 0.02)
+    block("juryrailtop", g, (0.24, 4.1, 0.07), (-3.95, 2.4, rise + 0.93), p.wood_dark, 0.02)
+    block("juryfront", g, (2.0, 0.14, 0.9), (-4.9, 0.47, rise + 0.45), p.wood, 0.02)
+    block("juryfronttop", g, (2.1, 0.24, 0.07), (-4.9, 0.47, rise + 0.93), p.wood_dark, 0.02)
+    for k in range(4):
+        block(f"jurypanel_{k}", g, (0.04, 0.8, 0.55), (-3.875, 0.95 + k * 0.98, rise + 0.45), p.wood_dark, 0)
+    for k, cid in enumerate(JURY):
+        y = 3.85 - k * 0.98
+        seat = pivot(f"seat_{cid}", root, (-4.75, y, rise + 0.47))
+        seat.rotation_euler = (0, 0, r(JURY_TURN))
+        chair = pivot(f"chair_{cid}", g, (-4.75, y, rise))
+        chair.rotation_euler = (0, 0, r(JURY_TURN))
+        block(f"seat_{cid}_cushion", chair, (0.56, 0.5, 0.1), (0, 0.02, 0.42), p.leather, 0.03)
+        block(f"seat_{cid}_back", chair, (0.56, 0.1, 0.7), (0, 0.3, 0.75), p.leather, 0.04)
+        block(f"seat_{cid}_frame", chair, (0.5, 0.44, 0.36), (0, 0.02, 0.19), p.wood_dark, 0.02)
+
+
+def prosecution(root, p):
+    """Miejsce oskarzyciela: mownica ze skosnym blatem, zwrocona do srodka sali."""
+    g = pivot("prosecution", root, (3.4, 1.9, 0))
+    g.rotation_euler = (0, 0, r(-55))
+    block("lectern", g, (0.8, 0.5, 1.05), (0, 0, 0.525), p.wood, 0.03)
+    block("lecterntop", g, (0.9, 0.6, 0.06), (0, 0.02, 1.1), p.wood_dark, 0.02, rot=(r(-15), 0, 0))
+    block("lecternband", g, (0.82, 0.52, 0.08), (0, 0, 0.85), p.red, 0.01)
+    block("lecternbase", g, (1.0, 0.7, 0.08), (0, 0, 0.04), p.wood_dark, 0.02)
+    block("notes", g, (0.36, 0.26, 0.012), (0, 0.0, 1.14), p.paper, 0, rot=(r(-15), 0, 0))
+    # Oskarzyciel stoi 0,8 m za mownica, patrzac tam gdzie ona (przod mownicy to obrocone -Y).
+    stand = pivot("prosecutor_stand", root, (4.06, 2.36, 0))
+    stand.rotation_euler = (0, 0, r(-55))
+
+
+def evidence_table(root, p):
+    """Stol z aktami: teczka z napisem CV i plik kartek — tu laduje wniesione CV."""
+    g = pivot("table", root, (0, 2.0, 0))
+    block("tabletop", g, (1.8, 0.9, 0.08), (0, 0, 0.78), p.wood_dark, 0.02)
+    block("tableapron", g, (1.7, 0.8, 0.14), (0, 0, 0.67), p.wood, 0.015)
+    for k, (x, y) in enumerate(((-0.8, -0.35), (0.8, -0.35), (-0.8, 0.35), (0.8, 0.35))):
+        block(f"tableleg_{k}", g, (0.09, 0.09, 0.74), (x, y, 0.37), p.wood_dark, 0.015)
+    for k in range(4):
+        block(f"sheet_{k}", g, (0.32, 0.44, 0.008), (0.45, 0.02 * k, 0.824 + k * 0.008), p.paper, 0, rot=(0, 0, r(6 * k - 8)))
+    block("cvfolder", g, (0.5, 0.36, 0.03), (-0.3, -0.05, 0.835), p.folder, 0.008, rot=(0, 0, r(-6)))
+    pixels("cvlabel", g, ["XXX.X.X", "X...X.X", "X...X.X", "X....X.", "XXX..X."], 0.035, (0, 0), 0, p.white)
+    label = [o for o in g.children if o.name.startswith("cvlabel")]
+    for o in label:
+        # Piksele napisu leza na okladce: z plaszczyzny XZ na XY (na plasko) i na teczke.
+        x, _, z = o.location
+        o.location = (-0.3 + x, -0.05 + z, 0.853)
+        o.rotation_euler = (r(90), 0, 0)
+    pivot("cv_table", root, (0, 2.0, 0.82))
+
+
 def cameras(root):
     """Ujecia kamery: punkt i cel. Scena przelacza je, gdy zmienia sie mowca."""
     shots = {
@@ -140,6 +243,10 @@ def build():
     p = Palette()
     floor(root, p)
     walls(root, p)
+    bench(root, p)
+    jury_box(root, p)
+    prosecution(root, p)
+    evidence_table(root, p)
     cameras(root)
     return root
 
