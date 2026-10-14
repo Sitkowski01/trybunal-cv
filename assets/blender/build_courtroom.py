@@ -210,6 +210,86 @@ def evidence_table(root, p):
     pivot("cv_table", root, (0, 2.0, 0.82))
 
 
+def railing(root, p):
+    """Balustrada oddzielajaca sale od widowni, z przejsciem na srodku."""
+    g = pivot("railing", root, (0, 0, 0))
+    for side, sx in (("L", -1), ("R", 1)):
+        x0, x1 = sx * 1.1, sx * (W - 0.3)
+        mid, length = (x0 + x1) / 2, abs(x1 - x0)
+        block(f"railtop_{side}", g, (length, 0.12, 0.08), (mid, -0.6, 0.92), p.wood_dark, 0.02)
+        block(f"railbottom_{side}", g, (length, 0.1, 0.08), (mid, -0.6, 0.12), p.wood_dark, 0.02)
+        n = int(length / 0.3)
+        for k in range(n + 1):
+            x = x0 + sx * k * length / n
+            cyl(f"baluster_{side}_{k}", g, 0.035, 0.76, (x, -0.6, 0.52), p.wood, axis="Z", bevel=0, verts=10)
+        block(f"railpost_{side}", g, (0.16, 0.16, 1.05), (x0, -0.6, 0.525), p.wood_dark, 0.03)
+
+
+def gallery(root, p):
+    """Lawki dla publicznosci przed balustrada — przod sali nie jest pusta podloga."""
+    g = pivot("gallery", root, (0, 0, 0))
+    for row, y in enumerate((-1.5, -2.5)):
+        for side, sx in (("L", -1), ("R", 1)):
+            x, length = sx * 3.3, 3.8
+            name = f"pew_{side}_{row}"
+            block(f"{name}_seat", g, (length, 0.5, 0.08), (x, y, 0.46), p.wood, 0.02)
+            block(f"{name}_back", g, (length, 0.08, 0.5), (x, y + 0.26, 0.76), p.wood, 0.02)
+            block(f"{name}_backtop", g, (length + 0.06, 0.12, 0.06), (x, y + 0.26, 1.03), p.wood_dark, 0.02)
+            for k, dx in enumerate((-length / 2 + 0.05, length / 2 - 0.05)):
+                block(f"{name}_end_{k}", g, (0.08, 0.6, 0.9), (x + dx, y + 0.05, 0.45), p.wood_dark, 0.02)
+
+
+def bookshelves(root, p):
+    """Regaly z kodeksami po obu stronach lawy — kolor i faktura na scianie w glebi."""
+    g = pivot("library", root, (0, 0, 0))
+    height, width, depth = 2.6, 2.0, 0.4
+    widths = (0.07, 0.09, 0.06, 0.08, 0.1, 0.07, 0.05, 0.09)
+    for side, sx in (("L", -1), ("R", 1)):
+        cx, y = sx * 4.45, BACK - depth / 2 - 0.05
+        block(f"shelfback_{side}", g, (width, 0.04, height), (cx, y + depth / 2 - 0.02, height / 2), p.wood_dark, 0)
+        for e, dx in (("a", -1), ("b", 1)):
+            block(f"shelfside_{side}_{e}", g, (0.08, depth, height), (cx + dx * (width / 2 - 0.04), y, height / 2), p.wood, 0.015)
+        block(f"shelfcrown_{side}", g, (width + 0.12, depth + 0.08, 0.1), (cx, y, height + 0.05), p.wood_dark, 0.02)
+        for level in range(4):
+            z = 0.08 + level * 0.65
+            block(f"shelf_{side}_{level}", g, (width - 0.1, depth - 0.04, 0.05), (cx, y, z), p.wood, 0)
+            x, n = cx - width / 2 + 0.12, 0
+            while x < cx + width / 2 - 0.2:
+                w = widths[(n + level * 3 + (side == "R")) % len(widths)]
+                h = 0.36 + 0.06 * ((n * 5 + level) % 4)
+                tilt = r(12) if (n + level) % 9 == 4 else 0
+                block(f"book_{side}_{level}_{n}", g, (w - 0.008, depth - 0.12, h), (x + w / 2, y - 0.02, z + 0.025 + h / 2), p.books[(n * 3 + level) % len(p.books)], 0, rot=(0, tilt, 0))
+                x, n = x + w + (0.05 if tilt else 0), n + 1
+
+
+def plants(root, p):
+    """Fikusy w donicach w glebi sali, za lawa przysieglych i za mownica."""
+    g = pivot("plants", root, (0, 0, 0))
+    leaves = ((0, 0, 1.25, 0.42), (0.18, 0.1, 1.05, 0.3), (-0.17, -0.08, 1.0, 0.32), (0.05, -0.18, 1.5, 0.3), (-0.1, 0.15, 1.45, 0.28))
+    for side, sx in (("L", -1), ("R", 1)):
+        x, y = sx * 5.45, 5.1
+        cyl(f"pot_{side}", g, 0.26, 0.5, (x, y, 0.25), p.pot, axis="Z", verts=20)
+        cyl(f"potrim_{side}", g, 0.29, 0.07, (x, y, 0.5), p.pot, axis="Z", verts=20)
+        block(f"trunk_{side}", g, (0.06, 0.06, 0.6), (x, y, 0.75), p.wood_dark, 0.01)
+        for k, (dx, dy, z, s) in enumerate(leaves):
+            block(f"leaves_{side}_{k}", g, (s, s, s * 0.8), (x + dx, y + dy, z), p.leaf if k % 2 else p.leaf_dark, 0.04, rot=(0, 0, r(20 * k)))
+
+
+def chandeliers(root, p):
+    """Dwa zyrandole nad sala: obrecz, swiece i lancuch do sufitu."""
+    g = pivot("chandeliers", root, (0, 0, 0))
+    for side, sx in (("L", -1), ("R", 1)):
+        x, y, z = sx * 2.4, 3.2, 3.3
+        cyl(f"chain_{side}", g, 0.015, H - z, (x, y, (H + z) / 2), p.gold, axis="Z", bevel=0, verts=8)
+        cyl(f"ring_{side}", g, 0.45, 0.05, (x, y, z), p.gold, axis="Z", bevel=0, verts=32)
+        cyl(f"hub_{side}", g, 0.09, 0.2, (x, y, z), p.gold, axis="Z", verts=16)
+        for k in range(6):
+            a = r(60 * k + 30)
+            cx, cy = x + 0.45 * math.cos(a), y + 0.45 * math.sin(a)
+            block(f"candle_{side}_{k}", g, (0.05, 0.05, 0.14), (cx, cy, z + 0.1), p.white, 0)
+            block(f"flame_{side}_{k}", g, (0.035, 0.035, 0.06), (cx, cy, z + 0.2), p.lamp, 0)
+
+
 def cameras(root):
     """Ujecia kamery: punkt i cel. Scena przelacza je, gdy zmienia sie mowca."""
     shots = {
@@ -247,6 +327,11 @@ def build():
     jury_box(root, p)
     prosecution(root, p)
     evidence_table(root, p)
+    railing(root, p)
+    gallery(root, p)
+    bookshelves(root, p)
+    plants(root, p)
+    chandeliers(root, p)
     cameras(root)
     return root
 
