@@ -18,6 +18,8 @@ async function fileExample(page: Page, rounds = "1") {
 test("pelna rozprawa nad przykladowym CV: fazy na zywo, werdykt, poprawka jako diff", async ({ page }) => {
   await fileExample(page);
   await expect(page.getByText("Przed rozprawą ukryto dane osobowe: imię i nazwisko ×1.")).toBeVisible();
+  // Przegladarka bez WebGL (projekt "app"): sali 3D nie ma, cala rozprawa jest w widoku 2D.
+  await expect(page.getByRole("region", { name: "Sala rozpraw" })).toHaveCount(0);
   // Na zywo: krytycy czytaja akta, potem debata z mowca.
   await expect(status(page)).toContainText(/Krytycy czytają akta|Prokurator/u);
   await expect(status(page)).toContainText("Debata, runda 1 z 1 — mówi");

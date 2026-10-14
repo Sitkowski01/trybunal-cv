@@ -23,6 +23,14 @@ const servers = ({ api, web, delayMs }: { api: number; web: number; delayMs: num
   },
 ];
 
+// PW_CHANNEL=msedge: przegladarka z systemu, gdy nie da sie pobrac Chromium Playwrighta.
+// PW_SOFTWARE_GL=1: WebGL liczony przez procesor, jak w CI (sprawdzenie lokalne trybu oszczednego).
+const browser = {
+  ...devices["Desktop Chrome"],
+  ...(process.env.PW_CHANNEL === undefined ? {} : { channel: process.env.PW_CHANNEL }),
+};
+const softwareGl = process.env.PW_SOFTWARE_GL === undefined ? [] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-gpu"];
+
 export default defineConfig({
   testDir: ".",
   fullyParallel: true,
@@ -33,7 +41,11 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${String(WEB.web)}`,
     trace: "retain-on-failure",
   },
-  // PW_CHANNEL=msedge: przegladarka z systemu, gdy nie da sie pobrac Chromium Playwrighta.
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], ...(process.env.PW_CHANNEL === undefined ? {} : { channel: process.env.PW_CHANNEL }) } }],
+  // Aplikacja bez WebGL: sprawdza widok 2D (tak samo dziala przegladarka bez WebGL 2), a w CI bez karty
+  // graficznej scena liczona przez procesor nie zabiera czasu testom rozprawy. Sala 3D rusza osobno, po nich.
+  projects: [
+    { name: "app", testIgnore: "scene.spec.ts", use: { ...browser, launchOptions: { args: ["--disable-webgl"] } } },
+    { name: "scene", testMatch: "scene.spec.ts", dependencies: ["app"], use: { ...browser, launchOptions: { args: softwareGl } } },
+  ],
   webServer: [...servers(WEB), ...servers(SCENE)],
 });

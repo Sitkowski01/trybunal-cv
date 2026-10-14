@@ -22,7 +22,8 @@ const collectErrors = (page: Page) => {
 
 // Wolna proba generalna (1,5 s na odpowiedz, jak prawdziwy model): kamera zdazy dojechac do mowcy.
 test.use({ baseURL: `http://127.0.0.1:${String(SCENE.web)}` });
-test.describe.configure({ timeout: 60_000 });
+// Szeregowo: dwie sceny naraz na WebGL bez karty graficznej odbieraja sobie procesor.
+test.describe.configure({ timeout: 120_000, mode: "serial" });
 
 // Zapisujemy w przegladarce kazda zmiane ujecia i mowcy, a na koncu sprawdzamy cala historie —
 // sprawdzanie stanu w trakcie mogloby przegapic krotkie ujecie, gdy strona sklada kilka zdarzen naraz.
@@ -45,8 +46,8 @@ test("sala 3D w ruchu: plotno rysuje, dymek nad mowca, na koncu sedzia i werdykt
   await page.addInitScript(recordDirection);
   await fileExample(page);
   const scene = page.locator(".scene");
-  await expect(scene.locator("canvas")).toBeVisible({ timeout: 40_000 });
-  await expect(scene).toHaveAttribute("data-verdict", "invite", { timeout: 40_000 });
+  await expect(scene.locator("canvas")).toBeVisible({ timeout: 90_000 });
+  await expect(scene).toHaveAttribute("data-verdict", "invite", { timeout: 90_000 });
   await expect(scene.locator(".scene__verdict")).toHaveText("ZAPROSIĆ");
   // Pierwsze wczytanie modeli na programowym WebGL potrafi na chwile zatrzymac strone i React sklada kilka
   // zdarzen naraz — dlatego tu tylko: byl dymek w debacie i koniec u sedziego.
@@ -65,7 +66,7 @@ test("bez ruchu (prefers-reduced-motion): kazdy mowca po kolei, potem werdykt; s
   await page.addInitScript(recordDirection);
   await fileExample(page);
   const scene = page.locator(".scene");
-  await expect(scene).toHaveAttribute("data-verdict", "invite", { timeout: 40_000 });
+  await expect(scene).toHaveAttribute("data-verdict", "invite", { timeout: 90_000 });
   const history = await historyOf(page);
   for (const juror of ["ats", "hr", "techLead", "hiringManager"]) expect(history).toContain(`jury:${juror}:dymek`);
   expect(history).toContain("prosecutor:prosecutor:dymek");
