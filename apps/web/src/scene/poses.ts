@@ -1,3 +1,4 @@
+import { dampVec } from "./camera.js";
 import { CHARACTER_IDS, type CharacterId, type Joint } from "./characters.js";
 import { isSeated } from "./courtroom.js";
 import type { Action } from "./direct.js";
@@ -118,3 +119,16 @@ export function pose(id: CharacterId, action: Action, t: number, { still = false
   return p;
 }
 
+/** Przejscie miedzy pozami trwa okolo 0,3 s — zmiana akcji nie przeskakuje z klatki na klatke. */
+export const POSE_RATE = 10;
+
+const REST: Euler3 = [0, 0, 0];
+
+/** Krok od biezacej pozy do docelowej (dt = Infinity: od razu docelowa). Brak stawu = poza spoczynkowa. */
+export function approach(from: Pose, to: Pose, dt: number, rate = POSE_RATE): Pose {
+  const result: Partial<Record<Joint, Euler3>> = {};
+  for (const joint of new Set([...Object.keys(from), ...Object.keys(to)] as Joint[])) {
+    result[joint] = dampVec(from[joint] ?? REST, to[joint] ?? REST, rate, dt);
+  }
+  return result;
+}

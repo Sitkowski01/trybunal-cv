@@ -2,7 +2,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { CHARACTER_IDS, type CharacterId, DRAGON_JOINTS, jointsOf } from "./characters.js";
 import type { Action } from "./direct.js";
-import { deg, POINT_TURN, pose } from "./poses.js";
+import { approach, deg, GAVEL_PERIOD, GAVEL_STRIKES, gavelSwing, POINT_TURN, type Pose, pose } from "./poses.js";
 
 const ACTIONS: readonly Action[] = ["idle", "reading", "assessed", "thinking", "speaking", "listening", "pointing", "deliberating", "gavel"];
 const x = (id: CharacterId, action: Action, joint: string, t = 0, still = true) =>
@@ -71,5 +71,62 @@ describe("pozy", () => {
         }
       }),
     );
+  });
+});
+
+describe("mlotek", () => {
+  it("zamach do gory, szybkie uderzenie, po trzech uderzeniach reka zostaje na stole", () => {
+    expect(gavelSwing(0)).toBe(1);
+    expect(gavelSwing(GAVEL_PERIOD * 0.64)).toBeLessThan(0.01);
+    expect(gavelSwing(GAVEL_PERIOD * 0.7)).toBeCloseTo(0.5, 6);
+    expect(gavelSwing(GAVEL_PERIOD * 0.8)).toBe(1);
+    expect(gavelSwing(GAVEL_PERIOD * (GAVEL_STRIKES - 1) + GAVEL_PERIOD * 0.3)).toBeLessThan(1);
+    expect(gavelSwing(GAVEL_PERIOD * GAVEL_STRIKES)).toBe(1);
+    expect(gavelSwing(GAVEL_PERIOD * GAVEL_STRIKES + 0.5)).toBe(1);
+  });
+
+  it("reka sedziego: nad glowa w zamachu, nisko po uderzeniu i w pozie bez ruchu", () => {
+    close(x("judge", "gavel", "shoulder_R", GAVEL_PERIOD * 0.64, false), -150 + 70 * gavelSwing(GAVEL_PERIOD * 0.64));
+    expect(x("judge", "gavel", "shoulder_R", GAVEL_PERIOD * 0.64, false)).toBeLessThan(deg(-145));
+    close(x("judge", "gavel", "shoulder_R", 0.3, true), -80);
+    close(x("judge", "gavel", "elbow_R", 0.3, true), -40);
+  });
+
+  it("przy uderzeniu przedramie jest 30 stopni nad poziomem i obrocone, zeby obuch szedl w dol", () => {
+    const strike = pose("judge", "gavel", GAVEL_PERIOD * GAVEL_STRIKES);
+    expect((strike.shoulder_R?.[0] ?? 0) + (strike.elbow_R?.[0] ?? 0)).toBeCloseTo(deg(-120), 9);
+    expect(strike.elbow_R?.[1]).toBeCloseTo(Math.PI, 9);
+    expect(pose("judge", "deliberating", 1).elbow_R?.[1]).toBe(0);
+  });
+});
+
+describe("przejscie miedzy pozami", () => {
+  it("dt = Infinity to od razu poza docelowa, dt = 0 zostaje w miejscu", () => {
+    const from = pose("hr", "reading", 0, { still: true });
+    const to = pose("hr", "speaking", 0, { still: true });
+    const zeros = (p: object) => Object.fromEntries(Object.keys(p).map((j) => [j, [0, 0, 0]]));
+    expect(approach(from, to, Number.POSITIVE_INFINITY)).toEqual({ ...zeros(from), ...to });
+    expect(approach(from, to, 0)).toEqual({ ...zeros(to), ...from });
+  });
+
+  it("w kazdym kroku zbliza sie do celu, a staw nieobecny w celu wraca do zera", () => {
+    const step = approach({ head: [1, 0, 0], tail: [0, 1, 0] }, { head: [0, 0, 0] }, 0.1);
+    expect(step.head?.[0]).toBeCloseTo(Math.exp(-1), 9);
+    expect(step.tail?.[1]).toBeCloseTo(Math.exp(-1), 9);
+    expect(approach({}, { head: [1, 2, 3] }, 0.1, 20).head?.[2]).toBeCloseTo(3 * (1 - Math.exp(-2)), 9);
+  });
+});
+
+describe("tabela poz", () => {
+  // Kazda postac w kazdej akcji w dwoch chwilach ruchu, w stopniach. Zmiana animacji jest widoczna w review
+  // jak zmiana kodu (pliki .snap), a pomylony znak albo okres fali od razu zmienia tabele.
+  const row = (p: Pose) =>
+    Object.entries(p)
+      .map(([joint, angles]) => `${joint} ${angles.map((a) => ((a * 180) / Math.PI).toFixed(2)).join(",")}`)
+      .join(" | ");
+
+  it.each([0.37, 1.9])("t = %s s", (t) => {
+    const table = Object.fromEntries(CHARACTER_IDS.flatMap((id) => ACTIONS.map((action) => [`${id} ${action}`, row(pose(id, action, t))])));
+    expect(table).toMatchSnapshot();
   });
 });
