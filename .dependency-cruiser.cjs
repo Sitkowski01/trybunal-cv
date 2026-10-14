@@ -36,9 +36,9 @@ module.exports = {
     },
     {
       name: "web-model-bez-widoku",
-      comment: "stan sali i klient API to czysty TS: bez Reacta i komponentow — uzyje ich tez scena 3D",
+      comment: "stan sali, klient API i kontrakt postaci to czysty TS: bez Reacta i komponentow — uzyje ich tez scena 3D",
       severity: "error",
-      from: { path: "^apps/web/src/(api/|trial/(court|seats|activity|envelope)\\.ts$)", pathNot: "\\.test\\.ts$" },
+      from: { path: "^apps/web/src/(api/|scene/characters\\.ts$|trial/(court|seats|activity|envelope)\\.ts$)", pathNot: "\\.test\\.ts$" },
       to: { path: "(node_modules/react/|\\.tsx$|useCourt)" },
     },
     {

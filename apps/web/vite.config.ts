@@ -21,6 +21,8 @@ export default defineConfig({
   plugins: [react()],
   // Przykladowe CV i oferta z examples/ — te same co w CLI.
   resolve: { alias: { "@examples": join(workspaceRoot(import.meta.dirname), "examples") } },
+  // Modele postaci (public/models) — scena wczytuje je przez URL, testy jako ?inline.
+  assetsInclude: ["**/*.glb"],
   server: { proxy },
   preview: { proxy },
 });
