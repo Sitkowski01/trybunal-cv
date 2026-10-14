@@ -308,10 +308,105 @@ def build_tech_lead():
     return root
 
 
+def build_hiring_manager():
+    # Hiring Manager: granatowy garnitur z klapami, krawat, spokojna twarz i teczka.
+    p = Palette("hiringManager", (0.16, 0.24, 0.48), (0.24, 0.33, 0.6), (0.08, 0.1, 0.17), (0.85, 0.7, 0.35), (0.6, 0.85, 1.0))
+    shirt = mat("hiringManager_shirt", (0.96, 0.96, 0.98), rough=0.7)
+    tie = mat("hiringManager_tie", (0.78, 0.12, 0.14), rough=0.45)
+
+    def chest(spine, p):
+        block("shirt", spine, (0.16, 0.03, 0.3), (0, -0.188, 0.35), shirt, 0.01)
+        block("knot", spine, (0.06, 0.035, 0.05), (0, -0.2, 0.47), tie, 0.012)
+        block("tie", spine, (0.07, 0.025, 0.22), (0, -0.2, 0.33), tie, 0.012)
+        for side, sx in (("L", 1), ("R", -1)):
+            block(f"lapel_{side}", spine, (0.07, 0.03, 0.26), (sx * 0.1, -0.195, 0.37), p.trim, 0.012, rot=(0, sx * r(-18), 0))
+        block("pocketsquare", spine, (0.07, 0.03, 0.03), (0.2, -0.195, 0.43), p.accent, 0.008)
+        for i in range(2):
+            cyl(f"button_{i}", spine, 0.014, 0.02, (0, -0.2, 0.19 + i * 0.06), p.accent, axis="Y", bevel=0)
+
+    root, j = robot("hiringManager", p, chest=chest)
+    eyes_pair(j["head"], p, w=0.075, h=0.07, gap=0.09, z=0.22)
+    mouth(j["head"], p, w=0.11, z=0.135, smile=0.008)
+    # Fryzura z przedzialkiem — zeby z daleka nie mylil sie z innymi robotami.
+    hair = mat("hiringManager_hair", (0.18, 0.12, 0.08), rough=0.6)
+    block("hair", j["head"], (0.53, 0.45, 0.06), (0, 0.01, 0.41), hair, 0.03)
+    block("hairback", j["head"], (0.53, 0.08, 0.2), (0, 0.2, 0.33), hair, 0.03)
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"hairside_{side}", j["head"], (0.04, 0.34, 0.14), (sx * 0.255, 0.04, 0.35), hair, 0.015)
+    # Przedzialek z lewej, grzywka zaczesana w prawo i lekko uniesiona.
+    block("quiff", j["head"], (0.36, 0.16, 0.07), (-0.07, -0.13, 0.445), hair, 0.03, rot=(r(-10), r(-6), 0))
+    block("parting", j["head"], (0.015, 0.3, 0.012), (0.12, -0.02, 0.442), mat("hiringManager_parting", (0.1, 0.07, 0.05)), 0)
+    # Teczka w prawej dloni.
+    leather = mat("hiringManager_case", (0.36, 0.2, 0.1), rough=0.55)
+    el = j["elbow_R"]
+    block("briefcase", el, (0.1, 0.38, 0.27), (0, -0.02, -0.5), leather, 0.03)
+    block("casehandle", el, (0.03, 0.14, 0.04), (0, -0.02, -0.35), leather, 0.01)
+    for side, sy in (("a", 1), ("b", -1)):
+        block(f"caselatch_{side}", el, (0.105, 0.04, 0.03), (0, -0.02 + sy * 0.1, -0.41), p.accent, 0.006)
+    return root
+
+
+def build_judge():
+    """Sedzia: wiekszy robot w todze z fioletowym zabotem, lancuchem, peruka i mlotkiem."""
+    p = Palette("judge", (0.6, 0.63, 0.68), (0.78, 0.8, 0.84), (0.16, 0.16, 0.18), (0.88, 0.68, 0.22), (1.0, 0.85, 0.45))
+    robe = mat("judge_robe", (0.035, 0.035, 0.045), rough=0.85)
+    purple = mat("judge_jabot", (0.42, 0.14, 0.58), rough=0.6)
+    gold = mat("judge_gold", (0.95, 0.72, 0.25), metal=1.0, rough=0.25)
+
+    def chest(spine, p):
+        # Toga do kolan, rozszerzajaca sie ku dolowi; fioletowy kolnierz i zabot jak w polskim sadzie.
+        block("robe", spine, (0.66, 0.44, 0.96), (0, 0, 0.06), robe, 0.08)
+        block("robeseam", spine, (0.012, 0.012, 0.6), (0, -0.222, -0.1), mat("judge_seam", (0.13, 0.13, 0.15), rough=0.8), 0)
+        block("collar", spine, (0.46, 0.4, 0.06), (0, 0, 0.53), purple, 0.025)
+        block("jabot", spine, (0.13, 0.04, 0.16), (0, -0.235, 0.43), purple, 0.025)
+        # Lancuch sedziowski: ogniwa w ksztalt litery V, medalion z orlem.
+        links = 5
+        for side, sx in (("L", 1), ("R", -1)):
+            for k in range(links):
+                t = k / (links - 1)
+                x, z = sx * (0.2 - 0.17 * t), 0.5 - 0.2 * t
+                block(f"chain_{side}_{k}", spine, (0.045, 0.03, 0.03), (x, -0.235, z), gold, 0.008, rot=(0, sx * r(50), 0))
+        cyl("medallion", spine, 0.06, 0.025, (0, -0.245, 0.24), gold, axis="Y", verts=28)
+        block("eagle", spine, (0.05, 0.012, 0.055), (0, -0.26, 0.24), mat("judge_eagle", (0.95, 0.95, 0.95), rough=0.4), 0.006)
+
+    root, j = robot("judge", p, chest=chest, pauldrons=False, backpack=False)
+    # Toga zaslania tez ramiona; fioletowy mankiet na koncu rekawa.
+    for side, sx in (("L", 1), ("R", -1)):
+        sh = j[f"shoulder_{side}"]
+        block(f"sleeve_{side}", sh, (0.24, 0.27, 0.36), (sx * 0.01, 0, -0.07), robe, 0.07)
+        el = j[f"elbow_{side}"]
+        block(f"sleevelower_{side}", el, (0.22, 0.24, 0.2), (0, 0, -0.1), robe, 0.06)
+        block(f"sleevecuff_{side}", el, (0.23, 0.25, 0.05), (0, 0, -0.2), purple, 0.02)
+    eyes_pair(j["head"], p, w=0.08, h=0.05, gap=0.09, z=0.21)
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"brow_{side}", j["head"], (0.1, 0.012, 0.02), (sx * 0.09, FACE_Y - 0.012, 0.26), p.eye, 0.005, rot=(0, sx * r(14), 0))
+    block("mouth", j["head"], (0.12, 0.012, 0.02), (0, FACE_Y - 0.012, 0.13), p.eye, 0.005)
+    # Peruka: czapa i trzy rzedy lokow po bokach.
+    wig = mat("judge_wig", (0.96, 0.95, 0.9), rough=0.95)
+    block("wigtop", j["head"], (0.56, 0.48, 0.12), (0, 0.02, 0.43), wig, 0.05)
+    for side, sx in (("L", 1), ("R", -1)):
+        for k in range(3):
+            cyl(f"curl_{side}_{k}", j["head"], 0.055, 0.42, (sx * 0.3, 0.03, 0.38 - k * 0.11), wig, axis="Y", verts=16)
+    block("wigback", j["head"], (0.54, 0.06, 0.3), (0, 0.235, 0.3), wig, 0.03)
+    for k in range(2):
+        cyl(f"backcurl_{k}", j["head"], 0.05, 0.5, (0, 0.27, 0.2 - k * 0.1), wig, axis="X", verts=16)
+    # Mlotek w prawej dloni: trzonek do przodu, obuch w poprzek.
+    wood = mat("judge_wood", (0.38, 0.2, 0.09), rough=0.5)
+    el = j["elbow_R"]
+    cyl("gavelhandle", el, 0.022, 0.3, (0, -0.15, -0.29), wood, axis="Y", bevel=0)
+    cyl("gavelhead", el, 0.055, 0.2, (0, -0.31, -0.29), wood, axis="X", verts=24)
+    for side, sx in (("a", 1), ("b", -1)):
+        cyl(f"gavelband_{side}", el, 0.058, 0.02, (sx * 0.07, -0.31, -0.29), gold, axis="X", verts=24, bevel=0)
+    root.scale = (1.18, 1.18, 1.18)
+    return root
+
+
 BUILDERS = {
     "ats": build_ats,
     "hr": build_hr,
     "techLead": build_tech_lead,
+    "hiringManager": build_hiring_manager,
+    "judge": build_judge,
 }
 
 
