@@ -552,7 +552,119 @@ select:focus-visible {
   margin-top: 2rem;
 }
 
+/* Sala 3D nad lawa: plotno WebGL, dymek mowcy i tabliczka werdyktu jako zwykly DOM nad nim. */
+.stage {
+  position: relative;
+  margin: 1rem 0 1.5rem;
+}
+
+.stage__toggle {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  background: rgb(22 17 13 / 75%);
+  color: var(--text);
+  border-color: var(--brass-dim);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.stage__toggle[aria-pressed="false"] {
+  position: static;
+}
+
+.stage__loading {
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+}
+
+.scene {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #cfd6e2;
+}
+
+.scene__bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: min(22rem, 70%);
+  padding: 0.6rem 0.85rem;
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--paper-text);
+  font: 0.95rem/1.4 var(--serif);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* Ogonek dymka wskazuje mowce. */
+.scene__bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  translate: -50% 0;
+  border: 9px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--paper);
+}
+
+.scene__bubble--prosecutor {
+  border: 2px solid var(--reject);
+}
+
+.scene__revised {
+  color: var(--brass-dim);
+  white-space: nowrap;
+}
+
+.scene__verdict {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  translate: -50% 0;
+  padding: 0.5rem 1.6rem;
+  border: 3px solid currentcolor;
+  border-radius: 8px;
+  background: rgb(16 12 9 / 85%);
+  font: 700 clamp(1.4rem, 4vw, 2.6rem) / 1.1 var(--serif);
+  letter-spacing: 0.12em;
+  animation: verdict-in 0.6s ease-out both;
+}
+
+.scene__verdict--invite {
+  color: var(--invite);
+}
+
+.scene__verdict--reject {
+  color: var(--reject);
+}
+
+@keyframes verdict-in {
+  from {
+    opacity: 0;
+    scale: 1.4;
+  }
+}
+
+
 @media (prefers-reduced-motion: reduce) {
+  .scene__verdict {
+    animation: none;
+  }
+
   .critic {
     transition: none;
   }
