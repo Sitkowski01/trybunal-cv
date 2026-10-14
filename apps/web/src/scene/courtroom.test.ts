@@ -1,6 +1,6 @@
 import { CRITIC_IDS } from "@trybunal/domain";
-import { describe, expect, it } from "vitest";
-import { readGlb } from "../test/glb.js";
+import { beforeAll, describe, expect, it } from "vitest";
+import { type Gltf, readGlb } from "../test/glb.js";
 import { CHARACTER_IDS } from "./characters.js";
 import { ANCHORS, COURTROOM_URL, CV_TABLE, isSeated, missingAnchors, SHOTS, shotNodes, SPOTS } from "./courtroom.js";
 
@@ -27,9 +27,16 @@ describe("kontrakt sali", () => {
 });
 
 describe("model sali", () => {
-  const { bytes, gltf } = readGlb(COURTROOM_URL.replace("models/", ""));
-  const byName = new Map(gltf.nodes.map((n) => [n.name, n]));
-  const root = gltf.nodes[gltf.scenes[0]?.nodes[0] ?? -1];
+  // Jak w characters.test.ts: odczyt w beforeAll, zeby zly adres oblal testy zamiast je ukryc.
+  let bytes = 0;
+  let gltf: Gltf;
+  let byName: Map<string, Gltf["nodes"][number]>;
+  let root: Gltf["nodes"][number] | undefined;
+  beforeAll(() => {
+    ({ bytes, gltf } = readGlb(COURTROOM_URL.replace("models/", "")));
+    byName = new Map(gltf.nodes.map((n) => [n.name, n]));
+    root = gltf.nodes[gltf.scenes[0]?.nodes[0] ?? -1];
+  });
 
   it("ma wszystkie punkty zaczepienia bezposrednio pod korzeniem i bez siatek", () => {
     expect(root?.name).toBe("courtroom");

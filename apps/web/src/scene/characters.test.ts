@@ -1,6 +1,6 @@
 import { CRITIC_IDS } from "@trybunal/domain";
-import { describe, expect, it } from "vitest";
-import { readGlb } from "../test/glb.js";
+import { beforeAll, describe, expect, it } from "vitest";
+import { type Gltf, readGlb } from "../test/glb.js";
 import { CHARACTER_IDS, DRAGON_JOINTS, JOINTS, type Joint, jointsOf, missingJoints, modelUrl } from "./characters.js";
 
 describe("postacie", () => {
@@ -47,10 +47,16 @@ const PARENT: Record<Joint, Joint | "root"> = {
 };
 
 describe.each(CHARACTER_IDS)("model %s", (id) => {
-  const { bytes, gltf } = readGlb(modelUrl(id).replace("models/", ""));
-  const names = gltf.nodes.map((n) => n.name);
+  // Plik czytamy w beforeAll, nie przy zbieraniu testow: zly adres ma oblac testy, a nie wyzerowac ich liste.
+  let bytes = 0;
+  let gltf: Gltf;
+  let names: string[];
   const parentOf = new Map<string, string>();
-  for (const node of gltf.nodes) for (const child of node.children ?? []) parentOf.set(gltf.nodes[child]?.name ?? "", node.name);
+  beforeAll(() => {
+    ({ bytes, gltf } = readGlb(modelUrl(id).replace("models/", "")));
+    names = gltf.nodes.map((n) => n.name);
+    for (const node of gltf.nodes) for (const child of node.children ?? []) parentOf.set(gltf.nodes[child]?.name ?? "", node.name);
+  });
 
   it("jeden korzen nazwany jak postac, z identyfikatorem w extras", () => {
     const roots = gltf.scenes[0]?.nodes.map((i) => gltf.nodes[i]) ?? [];
