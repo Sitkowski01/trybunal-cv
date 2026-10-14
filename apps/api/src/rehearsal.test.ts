@@ -1,7 +1,8 @@
 import { runTrial } from "@trybunal/court";
 import { wordDiff } from "@trybunal/domain";
 import { describe, expect, it } from "vitest";
-import { firstQuotableLine, rehearsalLlm, slowRehearsalLlm } from "./rehearsal.js";
+import type { FakeScript } from "@trybunal/llm";
+import { firstQuotableLine, rehearsalLlm, rehearsalScript, slowRehearsalLlm } from "./rehearsal.js";
 
 const CV = "\n  \n- 12\n## Anna Nowak, backend\nJava, Spring";
 
@@ -30,6 +31,8 @@ describe("proba generalna", () => {
 
   it("CV bez linii z trzema literami: oceny bez cytatow", async () => {
     const run = await runTrial({ trialId: "t", cvText: "C#\n12", jobOffer: "Java", debateRounds: 0 }, { llm: rehearsalLlm() });
+    // Najpierw liczba: odrzucone oceny dalyby pusta liste, a every() na pustej liscie to true.
+    expect(run.state.assessments).toHaveLength(5);
     expect(run.state.assessments.every((a) => a.concerns.length === 0 && a.rewrites.length === 0)).toBe(true);
   });
 
@@ -63,5 +66,21 @@ describe("firstQuotableLine", () => {
     const line = `${"a".repeat(119)} ${"b".repeat(50)}`;
     expect(firstQuotableLine(line)).toBe("a".repeat(119));
     expect(firstQuotableLine("x".repeat(300))).toHaveLength(120);
+    // Wciecie nie zjada limitu: najpierw trim, potem ciecie.
+    expect(firstQuotableLine(`   ${line}`)).toBe("a".repeat(119));
+  });
+});
+
+describe("rehearsalScript", () => {
+  const assessment = (critic: string, documents: { name: string; text: string }[]) =>
+    rehearsalScript({ label: `assessment:${critic}`, documents } as unknown as Parameters<FakeScript>[0], 0) as { concerns: { quote: string }[] };
+
+  it("cytuje dokument cv, nawet gdy oferta jest pierwsza", () => {
+    const documents = [{ name: "jobOffer", text: "Python, Django" }, { name: "cv", text: "Java, Spring" }];
+    expect(assessment("techLead", documents).concerns.map((c) => c.quote)).toEqual(["Java, Spring"]);
+  });
+
+  it("bez dokumentu cv nie ma cytatow", () => {
+    expect(assessment("techLead", [{ name: "jobOffer", text: "Python, Django" }]).concerns).toEqual([]);
   });
 });

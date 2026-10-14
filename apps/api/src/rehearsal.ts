@@ -19,7 +19,7 @@ const MAX_QUOTE = 120;
 export function firstQuotableLine(cvText: string): string | null {
   for (const raw of cvText.split("\n")) {
     const line = raw.trim().slice(0, MAX_QUOTE).trim();
-    if ((line.match(/\p{L}/gu) ?? []).length >= 3) return line;
+    if ((line.match(/\p{L}/gu)?.length ?? 0) >= 3) return line;
   }
   return null;
 }
