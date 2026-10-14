@@ -29,8 +29,8 @@ test("pelna rozprawa nad przykladowym CV: fazy na zywo, werdykt, poprawka jako d
   await expect(page.getByText("Ocena 6 na 10, zmieniona z 5")).toBeAttached();
 
   const report = page.getByRole("region", { name: "Uzasadnienie na piśmie" });
-  await expect(report.locator(".diff ins")).toHaveText(" (wynik: czas odpowiedzi API krotszy o 40%)");
-  await expect(report.getByText("Brak projektu, ktory to potwierdza.")).toBeVisible();
+  await expect(report.locator(".diff ins")).toHaveText(" (wynik: czas odpowiedzi API krótszy o 40%)");
+  await expect(report.getByText("Brak projektu, który to potwierdza.")).toBeVisible();
   // Imie i nazwisko z formularza nie dotarlo do sadu ani do cytatow.
   await expect(page.getByText("[KANDYDAT]").first()).toBeVisible();
   await expect(page.locator("main")).not.toContainText("Anna Nowak");

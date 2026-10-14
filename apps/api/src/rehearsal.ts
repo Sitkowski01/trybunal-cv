@@ -31,24 +31,24 @@ export const rehearsalScript: FakeScript = (request) => {
     // Hiring Manager poprawia pierwszy punkt CV, Tech Lead ma do niego zastrzezenie.
     return {
       score: SCORES[critic],
-      summary: `Proba generalna: ocena krytyka ${critic}.`,
-      strengths: ["Konkretne technologie w doswiadczeniu"],
-      concerns: critic === "techLead" && quote !== null ? [{ quote, issue: "Brak projektu, ktory to potwierdza.", severity: "medium" }] : [],
+      summary: `Próba generalna: ocena krytyka ${critic}.`,
+      strengths: ["Konkretne technologie w doświadczeniu"],
+      concerns: critic === "techLead" && quote !== null ? [{ quote, issue: "Brak projektu, który to potwierdza.", severity: "medium" }] : [],
       rewrites:
         critic === "hiringManager" && quote !== null
-          ? [{ original: quote, proposed: `${quote} (wynik: czas odpowiedzi API krotszy o 40%)`, reason: "Wplyw wyrazony liczba." }]
+          ? [{ original: quote, proposed: `${quote} (wynik: czas odpowiedzi API krótszy o 40%)`, reason: "Wpływ wyrażony liczbą." }]
           : [],
     };
   }
   if (request.label === "prosecution") {
-    return { speech: "Wysoki Sadzie, to CV obiecuje wiecej, niz pokazuje. Wnosze o odrzucenie." };
+    return { speech: "Wysoki Sądzie, to CV obiecuje więcej, niż pokazuje. Wnoszę o odrzucenie." };
   }
   if (request.label.startsWith("statement:")) {
     // Tech Lead daje sie przekonac w pierwszej rundzie — w werdykcie widac zmiane zdania.
     const changes = request.label === "statement:1:techLead";
-    return { statement: changes ? "Po namysle podnosze ocene." : "Podtrzymuje swoja ocene.", revisedScore: changes ? 6 : null };
+    return { statement: changes ? "Po namyśle podnoszę ocenę." : "Podtrzymuję swoją ocenę.", revisedScore: changes ? 6 : null };
   }
-  return { justification: "Proba generalna: sad zaprasza kandydata na rozmowe, z uwagami krytykow." };
+  return { justification: "Próba generalna: sąd zaprasza kandydata na rozmowę, z uwagami krytyków." };
 };
 
 export const rehearsalLlm = () => new FakeLlmClient(rehearsalScript);

@@ -21,10 +21,10 @@ describe("proba generalna", () => {
   it("poprawka Hiring Managera i zastrzezenie Tech Leada cytuja CV - rozprawa je przyjmuje", async () => {
     const run = await runTrial({ trialId: "t", cvText: CV, jobOffer: "Java", debateRounds: 0 }, { llm: rehearsalLlm() });
     const byCritic = Object.fromEntries(run.state.assessments.map((a) => [a.criticId, a]));
-    expect(byCritic.techLead?.concerns).toEqual([{ quote: "## Anna Nowak, backend", issue: "Brak projektu, ktory to potwierdza.", severity: "medium" }]);
+    expect(byCritic.techLead?.concerns).toEqual([{ quote: "## Anna Nowak, backend", issue: "Brak projektu, który to potwierdza.", severity: "medium" }]);
     const rewrite = byCritic.hiringManager?.rewrites[0];
     expect(rewrite?.original).toBe("## Anna Nowak, backend");
-    expect(rewrite?.reason).toBe("Wplyw wyrazony liczba.");
+    expect(rewrite?.reason).toBe("Wpływ wyrażony liczbą.");
     expect(wordDiff(rewrite?.original ?? "", rewrite?.proposed ?? "").map((p) => p.kind)).toEqual(["same", "added"]);
     expect(run.state.assessments.filter((a) => a.concerns.length + a.rewrites.length > 0)).toHaveLength(2);
   });
