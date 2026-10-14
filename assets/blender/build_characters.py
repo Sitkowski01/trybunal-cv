@@ -112,7 +112,140 @@ def spike(name, parent, radius, height, loc, material, rot=(0, 0, 0)):
     return _finish(o, name, parent, loc, rot, material, 0)
 
 
+# ---------------------------------------------------------------- robot
+
+
+class Palette:
+    def __init__(self, cid, body, trim, dark, accent, eye):
+        self.body = mat(f"{cid}_body", body, metal=0.15, rough=0.38)
+        self.trim = mat(f"{cid}_trim", trim, metal=0.1, rough=0.45)
+        self.dark = mat(f"{cid}_dark", dark, metal=0.5, rough=0.45)
+        self.accent = mat(f"{cid}_accent", accent, metal=0.2, rough=0.35)
+        self.screen = mat(f"{cid}_screen", (0.02, 0.025, 0.035), metal=0.0, rough=0.12)
+        self.eye = mat(f"{cid}_eye", eye, emit=eye)
+
+
+HEAD = (0.5, 0.42, 0.4)  # szer., gleb., wys. glowy robota
+FACE_Y = -HEAD[1] / 2 - 0.004  # przednia sciana ekranu twarzy
+
+
+def robot(cid, p, *, chest=None, pauldrons=True, backpack=True):
+    """Robot-krytyk o wspolnym szkielecie. Zwraca (korzen, stawy)."""
+    root = bpy.data.objects.new(cid, None)
+    bpy.context.collection.objects.link(root)
+    root["character"] = cid
+    j = {}
+
+    # Biodra i nogi: krotkie i masywne — zabawkowe proporcje.
+    j["hips"] = pivot("hips", root, (0, 0, 0.74))
+    block("pelvis", j["hips"], (0.44, 0.28, 0.16), (0, 0, 0), p.dark, 0.04)
+    block("belt", j["hips"], (0.47, 0.3, 0.05), (0, 0, 0.06), p.trim, 0.015)
+    for side, sx in (("L", 1), ("R", -1)):
+        hip = j[f"hip_{side}"] = pivot(f"hip_{side}", j["hips"], (sx * 0.13, 0, -0.06))
+        cyl(f"hipjoint_{side}", hip, 0.07, 0.17, (0, 0, -0.01), p.dark)
+        block(f"thigh_{side}", hip, (0.17, 0.19, 0.24), (0, 0, -0.14), p.body, 0.035)
+        knee = j[f"knee_{side}"] = pivot(f"knee_{side}", hip, (0, 0, -0.29))
+        cyl(f"kneejoint_{side}", knee, 0.065, 0.15, (0, 0, 0), p.dark)
+        block(f"kneecap_{side}", knee, (0.12, 0.04, 0.09), (0, -0.09, 0.0), p.trim, 0.015)
+        block(f"shin_{side}", knee, (0.16, 0.18, 0.26), (0, 0, -0.16), p.body, 0.035)
+        block(f"boot_{side}", knee, (0.21, 0.32, 0.1), (0, -0.05, -0.38), p.dark, 0.035)
+        block(f"toecap_{side}", knee, (0.19, 0.08, 0.07), (0, -0.19, -0.385), p.accent, 0.02)
+
+    # Tulow: klatka piersiowa szersza od brzucha, z panelem na plecach.
+    j["spine"] = pivot("spine", j["hips"], (0, 0, 0.09))
+    block("abdomen", j["spine"], (0.4, 0.27, 0.14), (0, 0, 0.06), p.dark, 0.03)
+    for i in range(2):
+        block(f"rib_{i}", j["spine"], (0.42, 0.29, 0.02), (0, 0, 0.035 + i * 0.05), p.trim, 0.006)
+    block("chest", j["spine"], (0.58, 0.38, 0.38), (0, 0, 0.32), p.body, 0.06)
+    if backpack:
+        block("backpack", j["spine"], (0.4, 0.1, 0.28), (0, 0.22, 0.33), p.dark, 0.03)
+    for i in range(3 if backpack else 0):
+        block(f"vent_{i}", j["spine"], (0.3, 0.02, 0.025), (0, 0.272, 0.25 + i * 0.07), p.trim, 0.005)
+    if chest:
+        chest(j["spine"], p)
+    else:
+        block("chestplate", j["spine"], (0.32, 0.03, 0.2), (0, -0.19, 0.34), p.accent, 0.02)
+
+    # Szyja i glowa: duza glowa, twarz jako ciemny ekran.
+    j["neck"] = pivot("neck", j["spine"], (0, 0, 0.51))
+    cyl("neckpipe", j["neck"], 0.075, 0.09, (0, 0, 0.03), p.dark, axis="Z")
+    cyl("neckring", j["neck"], 0.095, 0.025, (0, 0, 0.0), p.trim, axis="Z")
+    j["head"] = pivot("head", j["neck"], (0, 0, 0.07))
+    block("skull", j["head"], HEAD, (0, 0, HEAD[2] / 2), p.body, 0.07)
+    block("facebezel", j["head"], (0.42, 0.02, 0.27), (0, FACE_Y + 0.006, 0.2), p.dark, 0.03)
+    block("screen", j["head"], (0.38, 0.02, 0.23), (0, FACE_Y - 0.002, 0.2), p.screen, 0.025)
+    for side, sx in (("L", 1), ("R", -1)):
+        cyl(f"earbolt_{side}", j["head"], 0.07, 0.05, (sx * 0.26, 0, 0.2), p.trim)
+        cyl(f"earcap_{side}", j["head"], 0.04, 0.03, (sx * 0.29, 0, 0.2), p.accent)
+
+    # Rece: naramiennik, przeguby, mocne przedramie, dlon z kciukiem.
+    for side, sx in (("L", 1), ("R", -1)):
+        sh = j[f"shoulder_{side}"] = pivot(f"shoulder_{side}", j["spine"], (sx * 0.36, 0, 0.42))
+        cyl(f"shoulderjoint_{side}", sh, 0.075, 0.12, (0, 0, 0), p.dark)
+        if pauldrons:
+            block(f"pauldron_{side}", sh, (0.2, 0.26, 0.11), (sx * 0.03, 0, 0.06), p.body, 0.045)
+        block(f"upperarm_{side}", sh, (0.12, 0.13, 0.2), (0, 0, -0.12), p.trim, 0.03)
+        el = j[f"elbow_{side}"] = pivot(f"elbow_{side}", sh, (0, 0, -0.24))
+        cyl(f"elbowjoint_{side}", el, 0.06, 0.13, (0, 0, 0), p.dark)
+        block(f"forearm_{side}", el, (0.15, 0.16, 0.2), (0, 0, -0.12), p.body, 0.04)
+        block(f"cuff_{side}", el, (0.16, 0.17, 0.04), (0, 0, -0.22), p.accent, 0.012)
+        block(f"palm_{side}", el, (0.11, 0.13, 0.11), (0, 0, -0.29), p.dark, 0.03)
+        block(f"thumb_{side}", el, (0.04, 0.05, 0.07), (-sx * 0.065, -0.04, -0.27), p.dark, 0.015)
+    return root, j
+
+
+def pixels(name, parent, rows, px, center, y, material):
+    """Piksel-art z klockow: rows to napisy, X = zapalony piksel; center = (x, z) srodka obrazka."""
+    h, w = len(rows), max(len(row) for row in rows)
+    for i, row in enumerate(rows):
+        for k, ch in enumerate(row):
+            if ch == "X":
+                x = center[0] + (k - (w - 1) / 2) * px
+                z = center[1] + ((h - 1) / 2 - i) * px
+                block(f"{name}_{i}_{k}", parent, (px * 0.92, 0.012, px * 0.92), (x, y, z), material, 0)
+
+
+def eyes_pair(head, p, w=0.07, h=0.08, gap=0.09, z=0.22, tilt=0.0, prefix="eye"):
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"{prefix}_{side}", head, (w, 0.012, h), (sx * gap, FACE_Y - 0.012, z), p.eye, min(w, h) * 0.35, rot=(0, sx * r(tilt), 0))
+
+
+def mouth(head, p, w=0.12, z=0.13, smile=0.0):
+    """Usta z trzech segmentow; smile > 0 unosi kaciki (usmiech), < 0 opuszcza."""
+    seg = w / 3
+    block("mouth_mid", head, (seg, 0.012, 0.022), (0, FACE_Y - 0.012, z), p.eye, 0.006)
+    for side, sx in (("L", 1), ("R", -1)):
+        block(f"mouth_{side}", head, (seg, 0.012, 0.022), (sx * seg * 0.95, FACE_Y - 0.012, z + smile * 0.5), p.eye, 0.006, rot=(0, -sx * r(smile * 600), 0))
+
+
+# ---------------------------------------------------------------- krytycy
+
+
+def build_ats():
+    # Bot ATS: jedno szerokie oko-skaner i kod kreskowy na piersi — czyta tylko slowa kluczowe.
+    p = Palette("ats", (0.08, 0.5, 0.46), (0.82, 0.86, 0.84), (0.1, 0.13, 0.15), (0.98, 0.78, 0.15), (0.35, 1.0, 0.5))
+
+    def chest(spine, p):
+        block("labelplate", spine, (0.34, 0.03, 0.2), (0, -0.19, 0.34), p.trim, 0.015)
+        bars = mat("ats_bars", (0.04, 0.05, 0.06), rough=0.6)
+        x = -0.13
+        for i, w in enumerate((0.012, 0.03, 0.012, 0.02, 0.04, 0.012, 0.025, 0.012, 0.03, 0.016)):
+            block(f"barcode_{i}", spine, (w, 0.012, 0.13), (x + w / 2, -0.207, 0.355), bars, 0)
+            x += w + 0.012
+        block("scanled", spine, (0.24, 0.012, 0.02), (0, -0.207, 0.27), p.eye, 0)
+
+    root, j = robot("ats", p, chest=chest)
+    block("scanner", j["head"], (0.32, 0.012, 0.045), (0, FACE_Y - 0.012, 0.22), p.eye, 0.012)
+    block("scanbeam", j["head"], (0.08, 0.013, 0.07), (0.06, FACE_Y - 0.014, 0.22), mat("ats_beam", (1, 1, 1), emit=(0.8, 1.0, 0.85), strength=6), 0.015)
+    block("readout", j["head"], (0.16, 0.012, 0.02), (-0.08, FACE_Y - 0.012, 0.14), p.eye, 0.005)
+    for side, sx in (("L", 1), ("R", -1)):
+        cyl(f"antenna_{side}", j["head"], 0.014, 0.16, (sx * 0.15, 0, 0.47), p.dark, axis="Z", bevel=0)
+        block(f"antennatip_{side}", j["head"], (0.045, 0.045, 0.045), (sx * 0.15, 0, 0.56), p.accent, 0.015)
+    return root
+
+
 BUILDERS = {
+    "ats": build_ats,
 }
 
 
