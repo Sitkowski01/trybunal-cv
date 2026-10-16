@@ -2,35 +2,48 @@
 # Bez klucza rozprawy ida w probie generalnej (bez modelu). Z modelem:
 #   ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build
 services:
+  # Sekrety losowane przy pierwszym starcie i trzymane w wolumenie, a nie wpisane w repozytorium:
+  # klucz glowny szyfrowania dziennika i haslo bazy. Kazdy plik czyta tylko jego wlasciciel
+  # (1000 = node w obrazie API, 70 = postgres w obrazie bazy). Usuniecie wolumenu = utrata rozpraw.
+  keygen:
+    image: alpine:3.22
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        umask 077
+        test -s /keys/master || head -c 32 /dev/urandom | base64 > /keys/master
+        test -s /keys/db-password || head -c 32 /dev/urandom | base64 | tr -d '/+=\n' > /keys/db-password
+        echo "postgres://trybunal:$$(cat /keys/db-password)@db:5432/trybunal" > /keys/database-url
+        chown 1000 /keys/master /keys/database-url
+        chown 70 /keys/db-password
+    volumes:
+      - keys:/keys
+
   db:
     image: postgres:17-alpine
-    # Haslo tylko dla sieci compose — port bazy nie jest wystawiony na zewnatrz.
+    depends_on:
+      keygen: { condition: service_completed_successfully }
+    # Port bazy nie jest wystawiony na zewnatrz — tylko siec compose.
     environment:
       POSTGRES_USER: trybunal
-      POSTGRES_PASSWORD: trybunal
+      POSTGRES_PASSWORD_FILE: /keys/db-password
       POSTGRES_DB: trybunal
     volumes:
       - db:/var/lib/postgresql/data
+      - keys:/keys:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "trybunal"]
       interval: 2s
       retries: 30
 
-  # Klucz glowny szyfrowania dziennika: losowany przy pierwszym starcie i trzymany w wolumenie,
-  # a nie wpisany w repozytorium. Usuniecie wolumenu = utrata dostepu do wszystkich rozpraw.
-  keygen:
-    image: alpine:3.22
-    command: ["sh", "-c", "umask 077; test -s /keys/master || head -c 32 /dev/urandom | base64 > /keys/master; chown 1000 /keys/master"]
-    volumes:
-      - keys:/keys
-
   api:
     build: { context: ., target: api }
     depends_on:
       db: { condition: service_healthy }
-      keygen: { condition: service_completed_successfully }
     environment:
-      DATABASE_URL: postgres://trybunal:trybunal@db:5432/trybunal
+      DATABASE_URL_FILE: /keys/database-url
       TRYBUNAL_MASTER_KEY_FILE: /keys/master
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       TRYBUNAL_REHEARSAL: ${TRYBUNAL_REHEARSAL:-1}

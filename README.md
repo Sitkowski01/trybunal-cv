@@ -230,8 +230,10 @@ pnpm --filter @trybunal/web build:demo      # -> apps/web/dist-demo
 
 `docker compose up --build` stawia Postgresa, API i nginx z frontendem (http://localhost:8080).
 
-- **Klucz główny szyfrowania nie jest w repozytorium**: jednorazowy kontener losuje go przy pierwszym
-  starcie do wolumenu, a API czyta go z pliku (`TRYBUNAL_MASTER_KEY_FILE`), nie ze zmiennej środowiska.
+- **Żadnych sekretów w repozytorium**: jednorazowy kontener losuje przy pierwszym starcie klucz główny
+  szyfrowania i hasło bazy do wolumenu (każdy plik czyta tylko jego właściciel). Postgres bierze hasło
+  z `POSTGRES_PASSWORD_FILE`, a API adres bazy i klucz z `DATABASE_URL_FILE` i `TRYBUNAL_MASTER_KEY_FILE` —
+  nie ze zmiennych środowiska, które widać w `docker inspect`.
 - **nginx** serwuje frontend i przekazuje `/api` do serwera bez buforowania (SSE). Nagłówek
   `X-Forwarded-For` jest nadpisywany adresem klienta — podrzucony przez klienta nie obejdzie limitu wniesień.
 - Obraz API ma tylko zależności produkcyjne (`pnpm deploy --prod`) i działa jako użytkownik bez uprawnień roota.
