@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Test dymny docker compose: cala aplikacja wstaje, rozprawa przez nginx dochodzi do werdyktu,
+# a po restarcie API dziennik z Postgresa nadal sie odszyfrowuje (klucz z wolumenu).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+web="http://localhost:${WEB_PORT:-8080}"
+
+# Odpowiedz najpierw do zmiennej: grep -q konczy sie przy pierwszym trafieniu, a przy pipefail
+# przerwany curl (SIGPIPE) wywrocilby test, choc wszystko dziala.
+verdict_in_stream() {
+  local events
+  events=$(curl -fsS -N --max-time "$2" "$web/api/trials/$1/events")
+  grep -q "event: VerdictAnnounced" <<<"$events"
+}
+
+wait_for() {
+  for _ in $(seq 1 60); do
+    if curl -fsS "$1" >/dev/null 2>&1; then return 0; fi
+    sleep 2
+  done
+  echo "Nie odpowiada: $1" >&2
+  docker compose logs
+  return 1
+}
+
+TRYBUNAL_REHEARSAL_DELAY_MS=0 docker compose up --build --detach
+wait_for "$web/api/health"
+page=$(curl -fsS "$web/")
+grep -q '<div id="root">' <<<"$page"
+
+filed=$(curl -fsS -X POST "$web/api/trials" -F "cvText=<examples/cv-anna-nowak.md" -F "jobOffer=<examples/oferta-junior-backend.md" -F debateRounds=1)
+id=$(echo "$filed" | sed -E 's/.*"trialId":"([^"]+)".*/\1/')
+echo "Rozprawa $id"
+verdict_in_stream "$id" 60
+
+docker compose restart api
+wait_for "$web/api/health"
+verdict_in_stream "$id" 10
+echo "OK: werdykt przez nginx i po restarcie API"

@@ -62,3 +62,12 @@ jobs:
             packages/*/reports/mutation
             apps/*/reports/mutation
             evals/reports/mutation
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose (Postgres, API, nginx) - rozprawa do werdyktu i restart API
+        run: bash scripts/compose-smoke.sh
+      - if: always()
+        run: docker compose down --volumes
