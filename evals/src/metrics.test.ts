@@ -1,5 +1,6 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { majority, stdDev, summarize } from "./metrics.js";
+import { caseDifferences, majority, stdDev, summarize, variantsOf } from "./metrics.js";
 import { aborted, outcome } from "./test/fixtures.js";
 
 describe("majority", () => {
@@ -37,6 +38,7 @@ describe("summarize", () => {
   it("bez zakonczonych rozpraw metryki sa puste, a nie zerowe", () => {
     const s = summarize("v1", [aborted({ costNanoUsd: 0, attempts: 0, inputTokens: 0 })]);
     expect(s).toMatchObject({ accuracy: null, cacheHitRatio: null, retryRate: null, missedCases: [] });
+    expect(s.stability).toEqual({ repeatedCases: 0, agreement: null, juryAverageStdDev: null, flippingCases: [] });
     expect(summarize("v9", []).cost).toEqual({ totalNanoUsd: 0, meanPerTrialNanoUsd: null, maxPerTrialNanoUsd: null });
   });
 
@@ -50,6 +52,21 @@ describe("summarize", () => {
       { tag: "slabe", completed: 1, correct: 1 },
       { tag: "ats", completed: 2, correct: 1 },
     ]);
+  });
+
+  it("stabilnosc: zgodnosc z wiekszoscia, odchylenie sredniej, przypadki zmieniajace werdykt", () => {
+    const s = summarize("v1", [
+      outcome({ caseId: "a", repeat: 0, decision: "invite", juryAverage: 6 }),
+      outcome({ caseId: "a", repeat: 1, decision: "reject", juryAverage: 5 }),
+      outcome({ caseId: "a", repeat: 2, decision: "invite", juryAverage: 7 }),
+      outcome({ caseId: "b", repeat: 0, decision: "reject", juryAverage: 3, expected: "reject" }),
+      outcome({ caseId: "b", repeat: 1, decision: "reject", juryAverage: 3, expected: "reject" }),
+      outcome({ caseId: "c", repeat: 0 }),
+    ]);
+    expect(s.stability.repeatedCases).toBe(2);
+    expect(s.stability.agreement).toBeCloseTo((2 / 3 + 1) / 2);
+    expect(s.stability.juryAverageStdDev).toBeCloseTo((Math.sqrt(2 / 3) + 0) / 2);
+    expect(s.stability.flippingCases).toEqual(["a"]);
   });
 
   it("chybione przypadki wedlug werdyktu wiekszosci powtorzen", () => {
@@ -70,5 +87,46 @@ describe("summarize", () => {
     expect(s.cost).toEqual({ totalNanoUsd: 1200, meanPerTrialNanoUsd: 600, maxPerTrialNanoUsd: 900 });
     expect(s.cacheHitRatio).toBe(200 / 500);
     expect(s.retryRate).toBe(4 / 20);
+  });
+
+  it("wlasnosc: trafne + chybione = zakonczone, a trafnosc i zgodnosc mieszcza sie w [0, 1]", () => {
+    const arbOutcome = fc.record({
+      caseId: fc.constantFrom("a", "b", "c"),
+      expected: fc.constantFrom("invite" as const, "reject" as const),
+      decision: fc.constantFrom("invite" as const, "reject" as const, null),
+      juryAverage: fc.double({ min: 1, max: 10, noNaN: true }),
+    });
+    fc.assert(
+      fc.property(fc.array(arbOutcome, { maxLength: 30 }), (rows) => {
+        const all = rows.map((r, repeat) => (r.decision === null ? aborted({ ...r, repeat }) : outcome({ ...r, repeat })));
+        const s = summarize("v1", all);
+        const c = s.confusion;
+        expect(c.invite.invite + c.invite.reject + c.reject.invite + c.reject.reject).toBe(s.completed);
+        expect(s.completed + s.aborted).toBe(s.trials);
+        for (const value of [s.accuracy, s.stability.agreement]) {
+          if (value !== null) expect(value >= 0 && value <= 1).toBe(true);
+        }
+        expect(s.stability.agreement === null || s.stability.agreement >= 0.5).toBe(true);
+      }),
+    );
+  });
+});
+
+describe("variantsOf i caseDifferences", () => {
+  it("warianty w kolejnosci pierwszego wystapienia", () => {
+    expect(variantsOf([outcome({ variant: "v2" }), outcome({ variant: "v1" }), outcome({ variant: "v2" })])).toEqual(["v2", "v1"]);
+  });
+
+  it("roznice werdyktow wiekszosci; przypadek bez wyniku w jednym z wariantow pomijany", () => {
+    const rows = [
+      outcome({ caseId: "a", variant: "v1", decision: "invite", expected: "reject" }),
+      outcome({ caseId: "a", variant: "v2", decision: "reject", expected: "reject" }),
+      outcome({ caseId: "b", variant: "v1", decision: "reject" }),
+      outcome({ caseId: "b", variant: "v2", decision: "reject" }),
+      outcome({ caseId: "c", variant: "v1", decision: "invite" }),
+      aborted({ caseId: "c", variant: "v2" }),
+      outcome({ caseId: "d", variant: "v2", decision: "invite" }),
+    ];
+    expect(caseDifferences(rows, "v1", "v2")).toEqual([{ caseId: "a", expected: "reject", base: "invite", candidate: "reject" }]);
   });
 });

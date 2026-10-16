@@ -18,6 +18,7 @@ export interface VariantSummary {
   /** Oczekiwany werdykt -> ogloszony werdykt. */
   readonly confusion: Readonly<Record<Decision, Readonly<Record<Decision, number>>>>;
   readonly byTag: readonly TagAccuracy[];
+  readonly stability: Stability;
   /** Przypadki, w ktorych werdykt wiekszosci powtorzen rozni sie od oczekiwanego. */
   readonly missedCases: readonly string[];
   readonly cost: Cost;
@@ -31,6 +32,17 @@ export interface TagAccuracy {
   readonly tag: Tag;
   readonly completed: number;
   readonly correct: number;
+}
+
+export interface Stability {
+  /** Przypadki z co najmniej dwiema zakonczonymi rozprawami — tylko na nich stabilnosc ma sens. */
+  readonly repeatedCases: number;
+  /** Srednio jaka czesc powtorzen zgadza sie z werdyktem wiekszosci (1 = zawsze to samo). */
+  readonly agreement: number | null;
+  /** Srednie odchylenie standardowe sredniej przysieglych miedzy powtorzeniami. */
+  readonly juryAverageStdDev: number | null;
+  /** Przypadki, w ktorych powtorzenia daly rozne werdykty. */
+  readonly flippingCases: readonly string[];
 }
 
 export interface Cost {
@@ -69,6 +81,20 @@ function byCase(outcomes: readonly Completed[]): Map<string, Runs> {
   return groups;
 }
 
+function stability(groups: ReadonlyMap<string, Runs>): Stability {
+  const repeated = [...groups].filter(([, runs]) => runs.length >= 2);
+  const agreements = repeated.map(([, runs]) => {
+    const winner = majority(runs.map((r) => r.decision));
+    return runs.filter((r) => r.decision === winner).length / runs.length;
+  });
+  return {
+    repeatedCases: repeated.length,
+    agreement: mean(agreements),
+    juryAverageStdDev: mean(repeated.map(([, runs]) => stdDev(runs.map((r) => r.juryAverage)))),
+    flippingCases: repeated.filter(([, runs]) => new Set(runs.map((r) => r.decision)).size > 1).map(([id]) => id),
+  };
+}
+
 export function summarize(variant: string, all: readonly TrialOutcome[]): VariantSummary {
   const outcomes = all.filter((o) => o.variant === variant);
   const completed = outcomes.filter(isCompleted);
@@ -95,6 +121,7 @@ export function summarize(variant: string, all: readonly TrialOutcome[]): Varian
       const tagged = completed.filter((o) => o.tags.includes(tag));
       return tagged.length === 0 ? [] : [{ tag, completed: tagged.length, correct: tagged.filter((o) => o.decision === o.expected).length }];
     }),
+    stability: stability(groups),
     missedCases: [...groups].filter(([, runs]) => majority(runs.map((r) => r.decision)) !== runs[0].expected).map(([id]) => id),
     cost: {
       totalNanoUsd: sum((o) => o.costNanoUsd),
@@ -104,4 +131,28 @@ export function summarize(variant: string, all: readonly TrialOutcome[]): Varian
     cacheHitRatio: ratio(sum((o) => o.cacheReadTokens), allInput),
     retryRate: ratio(sum((o) => o.failedAttempts), sum((o) => o.attempts)),
   };
+}
+
+/** Warianty w kolejnosci pierwszego wystapienia w wynikach. */
+export function variantsOf(outcomes: readonly TrialOutcome[]): string[] {
+  return [...new Set(outcomes.map((o) => o.variant))];
+}
+
+/** Przypadek, w ktorym warianty ogloszaja rozne werdykty wiekszosci — tu widac, co zmienila nowa wersja. */
+export interface CaseDifference {
+  readonly caseId: string;
+  readonly expected: Decision;
+  readonly base: Decision;
+  readonly candidate: Decision;
+}
+
+export function caseDifferences(outcomes: readonly TrialOutcome[], base: string, candidate: string): CaseDifference[] {
+  const groups = (variant: string) => byCase(outcomes.filter((o) => o.variant === variant).filter(isCompleted));
+  const verdict = (runs: readonly Completed[]) => majority(runs.map((r) => r.decision));
+  const other = groups(candidate);
+  return [...groups(base)].flatMap(([caseId, runs]) => {
+    const candidateRuns = other.get(caseId);
+    if (candidateRuns === undefined || verdict(candidateRuns) === verdict(runs)) return [];
+    return [{ caseId, expected: runs[0].expected, base: verdict(runs), candidate: verdict(candidateRuns) }];
+  });
 }
