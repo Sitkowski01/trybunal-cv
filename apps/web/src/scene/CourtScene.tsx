@@ -1,10 +1,11 @@
+import type { CriticId } from "@trybunal/domain";
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { type RefObject, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { type Group, type Object3D, PMREMGenerator, Quaternion, Vector3 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { type GLTF, GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CHARACTER_IDS, type CharacterId, jointsOf, missingJoints, modelUrl } from "./characters.js";
-import { CAMERA_RATE, dampVec, keepInside, toScreen, type Vec3 } from "./camera.js";
+import { CAMERA_RATE, dampVec, keepInside, onScreen, toScreen, type Vec3 } from "./camera.js";
 import { COURTROOM_URL, isSeated, missingAnchors, type Shot, shotNodes, SPOTS } from "./courtroom.js";
 import type { Action, Direction } from "./direct.js";
 import { approach, type Pose, pose } from "./poses.js";
@@ -49,6 +50,14 @@ export default function CourtScene({ direction, reducedMotion, lowPower }: Court
       observer.disconnect();
     };
   }, [hasBubble]);
+  // Oceny nad glowami: tez zwykly DOM, przesuwany co klatke nad glowe krytyka.
+  const tagElements = useRef(new Map<CriticId, HTMLDivElement>());
+  const placeTag = useCallback((who: CriticId, x: number, y: number, visible: boolean) => {
+    const element = tagElements.current.get(who);
+    if (element === undefined) return;
+    element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
+    element.style.visibility = visible ? "visible" : "hidden";
+  }, []);
   // Dymek to zwykly element DOM nad plotnem; co klatke przesuwamy go nad glowe mowcy.
   const placeBubble = useCallback((x: number, y: number, visible: boolean) => {
     const element = bubble.current;
@@ -84,9 +93,23 @@ export default function CourtScene({ direction, reducedMotion, lowPower }: Court
           shadow-bias={-0.0005}
         />
         <Suspense fallback={null}>
-          <Court direction={direction} still={reducedMotion} placeBubble={placeBubble} />
+          <Court direction={direction} still={reducedMotion} placeBubble={placeBubble} placeTag={placeTag} />
         </Suspense>
       </Canvas>
+      {direction.scores.map((tag) => (
+        <div
+          key={tag.who}
+          ref={(element) => {
+            if (element === null) tagElements.current.delete(tag.who);
+            else tagElements.current.set(tag.who, element);
+          }}
+          className={`scene__score${tag.from === null ? "" : " scene__score--changed"}`}
+          data-score={tag.who}
+        >
+          {tag.from !== null && <s>{tag.from}</s>}
+          {tag.score}
+        </div>
+      ))}
       {said !== null && (
         <div ref={bubble} className={`scene__bubble scene__bubble--${said.who}`}>
           {said.text}
@@ -117,8 +140,16 @@ function Environment() {
 }
 
 type PlaceBubble = (x: number, y: number, visible: boolean) => void;
+type PlaceTag = (who: CriticId, x: number, y: number, visible: boolean) => void;
 
-function Court({ direction, still, placeBubble }: { readonly direction: Direction; readonly still: boolean; readonly placeBubble: PlaceBubble }) {
+interface CourtProps {
+  readonly direction: Direction;
+  readonly still: boolean;
+  readonly placeBubble: PlaceBubble;
+  readonly placeTag: PlaceTag;
+}
+
+function Court({ direction, still, placeBubble, placeTag }: CourtProps) {
   const room = useLoader(GLTFLoader, url(COURTROOM_URL));
   const models = useLoader(
     GLTFLoader,
@@ -167,6 +198,7 @@ function Court({ direction, still, placeBubble }: { readonly direction: Directio
       ))}
       <CameraRig shot={direction.shot} anchor={anchors} still={still} />
       <BubbleTracker who={direction.bubble?.who ?? null} heads={heads} place={placeBubble} />
+      <TagTracker whos={direction.scores.map((tag) => tag.who)} heads={heads} place={placeTag} />
     </>
   );
 }
@@ -245,6 +277,22 @@ function CameraRig({ shot, anchor, still }: { readonly shot: Shot; readonly anch
 }
 
 const ABOVE_HEAD = new Vector3(0, 0.75, 0);
+/** Ocena tuz nad glowa — nizej niz dymek, zeby ogonek dymka jej nie zaslanial. */
+const SCORE_ABOVE_HEAD = new Vector3(0, 0.42, 0);
+
+function TagTracker({ whos, heads, place }: { readonly whos: readonly CriticId[]; readonly heads: RefObject<Map<CharacterId, Object3D>>; readonly place: PlaceTag }) {
+  const { camera, size } = useThree();
+  useFrame(() => {
+    for (const who of whos) {
+      const head = heads.current.get(who);
+      if (head === undefined) continue;
+      const point = head.localToWorld(SCORE_ABOVE_HEAD.clone()).project(camera);
+      const { x, y, visible } = onScreen([point.x, point.y, point.z], size.width, size.height);
+      place(who, x, y, visible);
+    }
+  });
+  return null;
+}
 
 function BubbleTracker({ who, heads, place }: { readonly who: CharacterId | null; readonly heads: RefObject<Map<CharacterId, Object3D>>; readonly place: PlaceBubble }) {
   const { camera, size } = useThree();

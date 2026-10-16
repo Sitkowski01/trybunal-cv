@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { envelopes, fold, trial } from "../test/trials.js";
 import { emptyCourt } from "../trial/court.js";
 import { CHARACTER_IDS } from "./characters.js";
-import { BUBBLE_LIMIT, clip, direct, shotOf } from "./direct.js";
+import { BUBBLE_LIMIT, clip, direct, scoreTags, sentenceOf, shotOf } from "./direct.js";
 
 // Pelna rozprawa: wniesienie, 5 ocen, mowa, 2 rundy po 5 wypowiedzi (Tech Lead zmienia zdanie w 1.), werdykt.
 const events = envelopes(trial([7, 6, 5, 7, 3], [[null, null, 6, null, null], []]));
@@ -16,7 +16,7 @@ const ALL = events.length;
 
 describe("rezyser sceny", () => {
   it("przed wniesieniem i po przerwaniu: wszyscy czekaja, ujecie ogolne", () => {
-    const idle = { shot: "wide", bubble: null, verdict: null, actions: Object.fromEntries(CHARACTER_IDS.map((id) => [id, "idle"])) };
+    const idle = { shot: "wide", bubble: null, verdict: null, scores: [], actions: Object.fromEntries(CHARACTER_IDS.map((id) => [id, "idle"])) };
     expect(direct(emptyCourt)).toEqual(idle);
     expect(direct(fold(envelopes(trial([5, 5, 5, 5, 5], [[]], true))))).toEqual(idle);
   });
@@ -64,7 +64,8 @@ describe("rezyser sceny", () => {
     expect(deliberation).toMatchObject({ shot: "judge", bubble: null, verdict: null });
     expect(deliberation.actions.judge).toBe("deliberating");
     const closed = after(ALL);
-    expect(closed).toMatchObject({ shot: "judge", verdict: "invite" });
+    // Sedzia oglasza sentencje (pierwszy akapit uzasadnienia).
+    expect(closed).toMatchObject({ shot: "judge", verdict: "invite", bubble: { who: "judge", text: "Uzasadnienie", revisedScore: null } });
     expect(closed.actions.judge).toBe("gavel");
     expect(closed.actions.hr).toBe("assessed");
   });
@@ -74,12 +75,39 @@ describe("rezyser sceny", () => {
   });
 });
 
+describe("oceny nad glowami", () => {
+  it("pojawiaja sie wraz z ocenami, w kolejnosci miejsc; zmiana zdania pamieta ocene poczatkowa", () => {
+    expect(after(FILED).scores).toEqual([]);
+    expect(after(FILED + 2).scores).toEqual([
+      { who: "ats", score: 7, from: null },
+      { who: "hr", score: 6, from: null },
+    ]);
+    expect(after(ROUND1).scores).toEqual([
+      { who: "ats", score: 7, from: null },
+      { who: "hr", score: 6, from: null },
+      { who: "techLead", score: 6, from: 5 },
+      { who: "hiringManager", score: 7, from: null },
+      { who: "prosecutor", score: 3, from: null },
+    ]);
+    expect(after(ALL).scores).toEqual(after(ROUND1).scores);
+    expect(scoreTags(emptyCourt)).toEqual([]);
+  });
+});
+
+describe("sentenceOf", () => {
+  it("pierwszy akapit uzasadnienia, splaszczony; bez akapitow — calosc", () => {
+    expect(sentenceOf("Zaprosic: stos sie zgadza.\n\nCo przewazylo:\n- testy")).toBe("Zaprosic: stos sie zgadza.");
+    expect(sentenceOf("  Odrzucic,\nbo brak Javy.  \n \n Reszta")).toBe("Odrzucic, bo brak Javy.");
+    expect(sentenceOf("Jedno zdanie.")).toBe("Jedno zdanie.");
+  });
+});
+
 describe("clip", () => {
   it("splaszcza odstepy i przycina dluga wypowiedz z wielokropkiem", () => {
     expect(clip("  Po namysle\n\npodnosze   ocene. ")).toBe("Po namysle podnosze ocene.");
     // Ciecie tuz za spacja: wielokropek przylega do slowa.
     expect(clip(`${"a".repeat(BUBBLE_LIMIT - 2)} bbbbb`)).toBe(`${"a".repeat(BUBBLE_LIMIT - 2)}…`);
-    const long = clip("slowo ".repeat(60));
+    const long = clip("slowo ".repeat(100));
     expect(long).toHaveLength(BUBBLE_LIMIT);
     expect(long.endsWith("…")).toBe(true);
     expect(long.at(-2)).not.toBe(" ");

@@ -53,7 +53,9 @@ test("sala 3D w ruchu: plotno rysuje, dymek nad mowca, na koncu sedzia i werdykt
   // zdarzen naraz — dlatego tu tylko: byl dymek w debacie i koniec u sedziego.
   const history = await historyOf(page);
   expect(history.some((entry) => /^(jury|prosecutor):\w+:dymek$/u.test(entry))).toBe(true);
-  expect(history.at(-1)).toBe("judge::-");
+  // Narada bez dymka, potem sedzia oglasza sentencje.
+  expect(history).toContain("judge::-");
+  expect(history.at(-1)).toBe("judge:judge:dymek");
   // Plotno naprawde cos narysowalo: zrzut nie jest jednolitym kolorem.
   const shot = await scene.locator("canvas").screenshot();
   expect(new Set(shot.subarray(shot.length / 2, shot.length / 2 + 4000)).size).toBeGreaterThan(10);
@@ -70,7 +72,9 @@ test("bez ruchu (prefers-reduced-motion): kazdy mowca po kolei, potem werdykt; s
   const history = await historyOf(page);
   for (const juror of ["ats", "hr", "techLead", "hiringManager"]) expect(history).toContain(`jury:${juror}:dymek`);
   expect(history).toContain("prosecutor:prosecutor:dymek");
-  expect(history.at(-1)).toBe("judge::-");
+  // Narada bez dymka, potem sedzia oglasza sentencje.
+  expect(history).toContain("judge::-");
+  expect(history.at(-1)).toBe("judge:judge:dymek");
 
   await page.getByRole("button", { name: "Ukryj salę 3D" }).click();
   await expect(scene).toHaveCount(0);
