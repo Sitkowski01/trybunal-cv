@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { BUBBLE_MARGIN, damp, dampVec, EDGE, keepInside, toScreen } from "./camera.js";
+import { BUBBLE_MARGIN, damp, dampVec, EDGE, keepInside, onScreen, toScreen } from "./camera.js";
 
 describe("damp", () => {
   it("rusza z miejsca w strone celu, a przy dt = nieskonczonosc przeskakuje", () => {
@@ -22,6 +22,19 @@ describe("damp", () => {
     expect(dampVec([0, 10, -4], [10, 10, 4], 2, Number.POSITIVE_INFINITY)).toEqual([10, 10, 4]);
     const [x, y, z] = dampVec([0, 10, -4], [10, 10, 4], 2, 0.5);
     expect([x, y, z].map((v) => Number(v.toFixed(6)))).toEqual([damp(0, 10, 2, 0.5), 10, damp(-4, 4, 2, 0.5)].map((v) => Number(v.toFixed(6))));
+  });
+});
+
+describe("onScreen", () => {
+  it("piksele jak toScreen, ale bez przypinania: poza kadrem albo za kamera — niewidoczne", () => {
+    expect(onScreen([0.5, -0.5, 0.5], 800, 400)).toEqual({ x: 600, y: 300, visible: true });
+    expect(onScreen([1, 1, 0.5], 800, 400)).toEqual({ x: 800, y: 0, visible: true });
+    expect(onScreen([-1.01, 0, 0.5], 800, 400).visible).toBe(false);
+    expect(onScreen([0, 1.01, 0.5], 800, 400).visible).toBe(false);
+    expect(onScreen([0, -1.01, 0.5], 800, 400).visible).toBe(false);
+    expect(onScreen([1.01, 0, 0.5], 800, 400).visible).toBe(false);
+    expect(onScreen([0, 0, 1], 800, 400).visible).toBe(false);
+    expect(onScreen([0, 0, -1], 800, 400).visible).toBe(false);
   });
 });
 

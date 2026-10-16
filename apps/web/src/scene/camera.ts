@@ -21,6 +21,19 @@ export const EDGE = { x: 0.12, y: 0.2 } as const;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+/**
+ * Punkt po rzutowaniu na piksele bez przypinania do krawedzi — dla ocen nad glowami: postac poza
+ * kadrem nie ma oceny na brzegu ekranu, tylko jej nie widac.
+ */
+export function onScreen(ndc: Vec3, width: number, height: number): { readonly x: number; readonly y: number; readonly visible: boolean } {
+  const [x, y, z] = ndc;
+  return {
+    x: ((x + 1) / 2) * width,
+    y: ((1 - y) / 2) * height,
+    visible: z > -1 && z < 1 && Math.abs(x) <= 1 && Math.abs(y) <= 1,
+  };
+}
+
 /** Odstep dymka od krawedzi sali (px). */
 export const BUBBLE_MARGIN = 8;
 
