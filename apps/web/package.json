@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm typecheck && vite build",
+    "build": "pnpm typecheck && vite build && pnpm build:demo",
+    "build:demo": "vite build --mode demo --base ./ --outDir dist-demo",
     "typecheck": "tsc --noEmit && tsc --noEmit -p e2e",
     "test": "vitest run --coverage",
     "mutation": "stryker run",

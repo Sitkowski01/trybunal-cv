@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { SCENE, WEB } from "./servers.js";
+import { DEMO, SCENE, WEB } from "./servers.js";
 
 // E2E na prawdziwym API w trybie proby generalnej (bez modelu i klucza) i na zbudowanym frontendzie.
 // Dwie pary serwerow: szybka (300 ms przed kazda odpowiedzia — widac fazy i jest czas na anulowanie)
@@ -44,8 +44,24 @@ export default defineConfig({
   // Aplikacja bez WebGL: sprawdza widok 2D (tak samo dziala przegladarka bez WebGL 2), a w CI bez karty
   // graficznej scena liczona przez procesor nie zabiera czasu testom rozprawy. Sala 3D rusza osobno, po nich.
   projects: [
-    { name: "app", testIgnore: "scene.spec.ts", use: { ...browser, launchOptions: { args: ["--disable-webgl"] } } },
+    { name: "app", testIgnore: ["scene.spec.ts", "demo.spec.ts"], use: { ...browser, launchOptions: { args: ["--disable-webgl"] } } },
     { name: "scene", testMatch: "scene.spec.ts", dependencies: ["app"], use: { ...browser, launchOptions: { args: softwareGl } } },
+    // Demo: bez API, tylko pliki z dist-demo (build --mode demo) pod /trybunal/ — sprawdza tez wzgledne sciezki.
+    {
+      name: "demo",
+      testMatch: "demo.spec.ts",
+      use: { ...browser, baseURL: `http://127.0.0.1:${String(DEMO.web)}${DEMO.path}`, launchOptions: { args: ["--disable-webgl"] } },
+    },
   ],
-  webServer: [...servers(WEB), ...servers(SCENE)],
+  webServer: [
+    ...servers(WEB),
+    ...servers(SCENE),
+    {
+      cwd: "..",
+      command: `vite preview --outDir dist-demo --base ${DEMO.path} --host 127.0.0.1 --port ${String(DEMO.web)} --strictPort`,
+      url: `http://127.0.0.1:${String(DEMO.web)}${DEMO.path}`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+  ],
 });

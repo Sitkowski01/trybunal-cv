@@ -3,7 +3,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/coverage/**", "**/reports/**", "**/.stryker-tmp/**"] },
+  { ignores: ["**/dist/**", "**/dist-demo/**", "**/coverage/**", "**/reports/**", "**/.stryker-tmp/**"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {
