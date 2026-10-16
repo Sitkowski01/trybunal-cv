@@ -121,6 +121,56 @@ select:focus-visible {
   border-color: var(--reject);
 }
 
+.masthead .masthead__demo {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.2rem 0.75rem;
+  border: 1px solid var(--brass-dim);
+  border-radius: 999px;
+  color: var(--brass);
+  font-size: 0.9rem;
+}
+
+/* Demo bez serwera: strona startowa nagranej rozprawy */
+.demo {
+  max-width: 44rem;
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.demo h2 {
+  margin: 0;
+  font-family: var(--serif);
+}
+
+.demo summary {
+  cursor: pointer;
+  color: var(--brass);
+}
+
+.demo__doc {
+  white-space: pre-wrap;
+  max-height: 24rem;
+  overflow: auto;
+  background: var(--paper);
+  color: var(--paper-text);
+  border-radius: var(--radius);
+  padding: 1rem;
+  font-size: 0.85rem;
+}
+
+.demo__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.demo__actions a {
+  color: var(--brass);
+}
+
 /* Formularz wniesienia */
 .filing {
   display: grid;

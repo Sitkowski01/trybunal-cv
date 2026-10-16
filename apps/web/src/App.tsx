@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { TrialApi } from "./api/client.js";
 import type { EventSourceFactory } from "./api/stream.js";
+import { DemoIntro } from "./demo/DemoIntro.js";
+import { DEMO_TRIAL_ID } from "./demo/replay.js";
 import { FilingForm } from "./filing/FilingForm.js";
 import { describeAnonymized } from "./labels.js";
 import type { SceneSupport } from "./scene/support.js";
@@ -19,9 +21,11 @@ export interface AppProps {
   readonly sources: EventSourceFactory;
   /** Czy pokazac sale 3D (WebGL 2) i czy bez ruchu; null albo brak — tylko widok 2D. */
   readonly scene?: SceneSupport | null;
+  /** Demo bez serwera: zamiast formularza strona startowa nagranej rozprawy. */
+  readonly demo?: boolean;
 }
 
-export function App({ api, sources, scene = null }: AppProps) {
+export function App({ api, sources, scene = null, demo = false }: AppProps) {
   const [trialId, setTrialId] = useState(trialFromUrl);
   const [anonymized, setAnonymized] = useState<string | null>(null);
 
@@ -50,16 +54,25 @@ export function App({ api, sources, scene = null }: AppProps) {
       <header className="masthead">
         <h1>Trybunał CV</h1>
         <p>Pięciu krytyków AI ocenia CV pod ogłoszenie, spiera się w debacie, a sędzia ogłasza werdykt.</p>
+        {demo && <p className="masthead__demo">Demo — odtwarzanie nagranej rozprawy</p>}
       </header>
       {trialId === null ? (
         <main className="page">
-          <FilingForm
-            onFile={api.file}
-            onFiled={(filed) => {
-              setAnonymized(describeAnonymized(filed.anonymized));
-              navigate(filed.trialId);
-            }}
-          />
+          {demo ? (
+            <DemoIntro
+              onOpen={() => {
+                navigate(DEMO_TRIAL_ID);
+              }}
+            />
+          ) : (
+            <FilingForm
+              onFile={api.file}
+              onFiled={(filed) => {
+                setAnonymized(describeAnonymized(filed.anonymized));
+                navigate(filed.trialId);
+              }}
+            />
+          )}
         </main>
       ) : (
         <TrialPage
