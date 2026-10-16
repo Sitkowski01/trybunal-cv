@@ -90,4 +90,59 @@ describe("runEvals", () => {
     const outcomes = await runEvals({ ...plan, repeats: 1, variants: [PROMPTS], cases: [evalCase()] }, { llmFor: () => broken, concurrency: 1, onOutcome: () => undefined });
     expect(outcomes).toMatchObject([{ decision: null }]);
   });
+
+  it("zatrzymanie (budzet przebiegu): rozprawa przerwana przez nie nie trafia do wynikow, kolejne nie ruszaja", async () => {
+    let halted = false;
+    let started = 0;
+    const llmFor = () => {
+      started++;
+      return new FakeLlmClient((req, i) => {
+        if (started === 2 && req.label === "prosecution") {
+          halted = true;
+          throw new Error("budzet przebiegu");
+        }
+        return heuristicScript(req, i);
+      });
+    };
+    const saved: TrialOutcome[] = [];
+    const outcomes = await runEvals(plan, { llmFor, concurrency: 1, halted: () => halted, onOutcome: (o) => void saved.push(o) });
+    expect(keys(outcomes)).toEqual(["v1/a/0"]);
+    expect(saved).toHaveLength(1);
+    expect(started).toBe(2);
+  });
+
+  it("nieoczekiwany blad (zapis wyniku) zatrzymuje wszystkich pracownikow i wychodzi na zewnatrz", async () => {
+    let started = 0;
+    const llmFor = () => {
+      started++;
+      return heuristicLlm();
+    };
+    let saves = 0;
+    const onOutcome = () => {
+      saves++;
+      if (saves === 1) throw new Error("dysk pelny");
+    };
+    await expect(runEvals(plan, { llmFor, concurrency: 2, onOutcome })).rejects.toThrow("dysk pelny");
+    // Dwie rozprawy szly naraz; po bledzie nikt nie zaczyna nowej.
+    expect(started).toBe(2);
+    expect(saves).toBe(2);
+  });
+
+  it("Ctrl+C: anulowany sygnal nie zaczyna rozpraw", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const outcomes = await runEvals(plan, { llmFor: heuristicLlm, concurrency: 2, signal: controller.signal, onOutcome: () => undefined });
+    expect(outcomes).toEqual([]);
+  });
+
+  it("Ctrl+C w trakcie: przerwana rozprawa nie jest zapisana", async () => {
+    const controller = new AbortController();
+    const llmFor = () =>
+      new FakeLlmClient((req, i) => {
+        if (req.label === "prosecution") controller.abort();
+        return heuristicScript(req, i);
+      });
+    const outcomes = await runEvals(plan, { llmFor, concurrency: 1, signal: controller.signal, onOutcome: () => undefined });
+    expect(outcomes).toEqual([]);
+  });
 });
