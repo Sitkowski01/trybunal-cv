@@ -1,14 +1,14 @@
 import { PROMPTS } from "@trybunal/court";
 import { describe, expect, it } from "vitest";
 import { HEURISTIC_VARIANT, parseRunArgs, USAGE, UsageError } from "./args.js";
-import { PROMPTS_V2 } from "./variants.js";
+import { PROMPTS_SCENE, PROMPTS_V2 } from "./variants.js";
 
 describe("parseRunArgs", () => {
-  it("wartosci domyslne: Claude, oba warianty, 3 powtorzenia, budzet 15 USD i 1 USD na rozprawe", () => {
+  it("wartosci domyslne: Claude, prompty sadu i kandydat, 3 powtorzenia, budzet 15 USD i 1 USD na rozprawe", () => {
     expect(parseRunArgs(["--out", "x"])).toEqual({
       out: "x",
       llm: "anthropic",
-      variants: [PROMPTS, PROMPTS_V2],
+      variants: [PROMPTS, PROMPTS_SCENE],
       repeats: 3,
       debateRounds: 1,
       cases: null,
@@ -54,7 +54,7 @@ describe("parseRunArgs", () => {
     ["zero rownoleglosci", ["--concurrency", "0"], "--concurrency: liczba calkowita >= 1"],
     ["zerowy budzet", ["--budget-usd", "0"], "--budget-usd: kwota w USD wieksza od zera"],
     ["budzet rozprawy nie liczba", ["--trial-budget-usd", "abc"], "--trial-budget-usd: kwota w USD wieksza od zera"],
-    ["nieznany wariant", ["--variants", "v1,v9"], "Nieznany wariant: v9. Dostepne: v1, v2-kotwice"],
+    ["nieznany wariant", ["--variants", "v1,v9"], "Nieznany wariant: v9. Dostepne: v1, v2-kotwice, v3-scena"],
   ])("bledne wywolanie (%s): UsageError z komunikatem", (name, argv, message) => {
     const full = name === "bez --out" || name === "nieznana opcja" ? argv : ["--out", "x", ...argv];
     expect(() => parseRunArgs(full)).toThrow(UsageError);

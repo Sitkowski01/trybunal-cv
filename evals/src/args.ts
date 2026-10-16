@@ -1,9 +1,9 @@
 import { parseArgs } from "node:util";
 import { PROMPTS, type PromptSet } from "@trybunal/court";
-import { VARIANTS, variantByVersion } from "./variants.js";
+import { DEFAULT_VARIANTS, VARIANTS, variantByVersion } from "./variants.js";
 
 export const USAGE = `Uzycie:
-  pnpm evals run --out <katalog> [--llm anthropic|heuristic] [--variants v1,v2-kotwice] [--repeats 3]
+  pnpm evals run --out <katalog> [--llm anthropic|heuristic] [--variants v1,v3-scena] [--repeats 3]
                  [--rounds 1] [--cases id,id] [--concurrency 2] [--budget-usd 15] [--trial-budget-usd 1]
                  [--dataset evals/dataset] [--retry-aborted]
   pnpm evals report <katalog>`;
@@ -62,7 +62,7 @@ export function parseRunArgs(argv: readonly string[]): RunArgs {
       options: {
         out: { type: "string" },
         llm: { type: "string", default: "anthropic" },
-        variants: { type: "string", default: VARIANTS.map((v) => v.version).join(",") },
+        variants: { type: "string", default: DEFAULT_VARIANTS.map((v) => v.version).join(",") },
         repeats: { type: "string", default: "3" },
         rounds: { type: "string", default: "1" },
         cases: { type: "string" },
