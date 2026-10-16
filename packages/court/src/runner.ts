@@ -18,16 +18,7 @@ import type { z } from "zod";
 import { ask, type CallRecord } from "./ask.js";
 import { abortReason, allOrNothing, sleep } from "./control.js";
 import { AssessmentOutput, cacheLeader, type CourtConfig, DEFAULT_CONFIG, JustificationOutput, ProsecutionOutput, StatementOutput } from "./config.js";
-import {
-  ASSESSMENT_TASK,
-  debateTask,
-  documents,
-  instructionsFor,
-  JUDGE_INSTRUCTIONS,
-  judgeTask,
-  prosecutionTask,
-  RULES,
-} from "./prompts.js";
+import { documents, PROMPTS, type PromptSet } from "./prompts.js";
 
 export interface TrialInput {
   readonly trialId: string;
@@ -39,6 +30,8 @@ export interface TrialInput {
 export interface RunOptions {
   readonly llm: LlmClient;
   readonly config?: CourtConfig;
+  /** Wersja promptow; domyslnie biezaca. Ewaluacje podstawiaja tu warianty do porownania. */
+  readonly prompts?: PromptSet;
   readonly signal?: AbortSignal;
   readonly sleep?: (ms: number) => Promise<void>;
   /**
@@ -65,6 +58,7 @@ export interface TrialRun {
  */
 export async function runTrial(input: TrialInput, options: RunOptions): Promise<TrialRun> {
   const config = options.config ?? DEFAULT_CONFIG;
+  const prompts = options.prompts ?? PROMPTS;
   const calls: CallRecord[] = [];
   // Niepoprawne wejscie (np. puste CV) to blad wywolujacego, a nie przerwana rozprawa.
   const filed = TrialEventSchema.parse({ type: "TrialFiled", ...input });
@@ -93,7 +87,7 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
   };
 
   const question = <T>(signal: AbortSignal | undefined, request: Omit<StructuredRequest<T>, "rules" | "documents">, validate?: (d: T) => string[]) =>
-    ask(options.llm, { ...request, rules: RULES, documents: documents(state) }, {
+    ask(options.llm, { ...request, rules: prompts.rules, documents: documents(state) }, {
       maxAttempts: config.maxAttempts,
       sleep: options.sleep ?? sleep,
       record: (call) => calls.push(call),
@@ -108,8 +102,8 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
         label: `assessment:${criticId}`,
         model: config.models.assessment[criticId],
         maxTokens: config.maxTokens.assessment,
-        instructions: instructionsFor(criticById(criticId)),
-        task: ASSESSMENT_TASK,
+        instructions: prompts.instructionsFor(criticById(criticId)),
+        task: prompts.assessmentTask,
         schema: AssessmentOutput,
       },
       (o) => findInventedQuotes({ ...o, criticId }, state.cvText).map((q) => `Cytat "${q}" nie wystepuje doslownie w CV`),
@@ -129,8 +123,8 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
       label: "prosecution",
       model: config.models.prosecution,
       maxTokens: config.maxTokens.prosecution,
-      instructions: instructionsFor(criticById("prosecutor")),
-      task: prosecutionTask(state),
+      instructions: prompts.instructionsFor(criticById("prosecutor")),
+      task: prompts.prosecutionTask(state),
       schema: ProsecutionOutput,
     });
     emit({ type: "ProsecutionDelivered", speech }, "prosecution");
@@ -141,8 +135,8 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
         label,
         model: config.models.statement,
         maxTokens: config.maxTokens.statement,
-        instructions: instructionsFor(criticById(speaker)),
-        task: debateTask(state, speaker),
+        instructions: prompts.instructionsFor(criticById(speaker)),
+        task: prompts.debateTask(state, speaker),
         schema: StatementOutput,
       });
       emit({ type: "StatementMade", round: state.round, criticId: speaker, statement, revisedScore }, label);
@@ -152,8 +146,8 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
       label: "justification",
       model: config.models.justification,
       maxTokens: config.maxTokens.justification,
-      instructions: JUDGE_INSTRUCTIONS,
-      task: judgeTask(state, pendingVerdict(state)),
+      instructions: prompts.judgeInstructions,
+      task: prompts.judgeTask(state, pendingVerdict(state)),
       schema: JustificationOutput,
     });
     emit(announceVerdict(state, justification), "justification");

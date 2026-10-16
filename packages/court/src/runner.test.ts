@@ -12,7 +12,7 @@ import {
 } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG } from "./config.js";
-import { RULES } from "./prompts.js";
+import { type PromptSet, RULES } from "./prompts.js";
 import { runTrial, type TrialInput } from "./runner.js";
 
 const input: TrialInput = { trialId: "t-1", cvText: "Jan. Java, Spring. Ekspert React.", jobOffer: "Junior Java", debateRounds: 1 };
@@ -68,6 +68,27 @@ describe("runTrial — przebieg", () => {
         { name: "oferta", text: input.jobOffer },
       ]);
     }
+  });
+
+  it("inna wersja promptow trafia do kazdego zapytania w swojej fazie", async () => {
+    const llm = new FakeLlmClient(happy);
+    const prompts: PromptSet = {
+      version: "test",
+      rules: "R",
+      instructionsFor: (critic) => `I:${critic.id}`,
+      judgeInstructions: "J",
+      assessmentTask: "A",
+      prosecutionTask: (state) => `P:${String(state.assessments.length)}`,
+      debateTask: (state, id) => `D:${String(state.round)}:${id}`,
+      judgeTask: (_, verdict) => `W:${verdict.decision}`,
+    };
+    await runTrial(input, { llm, prompts });
+    const byLabel = new Map(llm.calls.map((c) => [c.label, c]));
+    expect(llm.calls.every((c) => c.rules === "R")).toBe(true);
+    expect(byLabel.get("assessment:hr")).toMatchObject({ instructions: "I:hr", task: "A" });
+    expect(byLabel.get("prosecution")).toMatchObject({ instructions: "I:prosecutor", task: "P:5" });
+    expect(byLabel.get("statement:1:ats")).toMatchObject({ instructions: "I:ats", task: "D:1:ats" });
+    expect(byLabel.get("justification")).toMatchObject({ instructions: "J", task: "W:invite" });
   });
 
   it("zmiana zdania w debacie trafia do werdyktu", async () => {

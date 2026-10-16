@@ -8,6 +8,7 @@ import {
   instructionsFor,
   JUDGE_INSTRUCTIONS,
   judgeTask,
+  PROMPTS,
   prosecutionTask,
   RULES,
 } from "./prompts.js";
@@ -155,5 +156,20 @@ describe("pełne prompty — zmiana tekstu promptu ma być widoczna w review", (
       judge: judgeTask(finished, pendingVerdict(finished)),
       judgeCalm: judgeTask(calmState(), pendingVerdict(calmState())),
     }).toMatchSnapshot();
+  });
+});
+
+describe("PROMPTS", () => {
+  it("biezaca wersja v1 sklada sie z promptow tego modulu", () => {
+    expect(PROMPTS).toEqual({
+      version: "v1",
+      rules: RULES,
+      instructionsFor,
+      judgeInstructions: JUDGE_INSTRUCTIONS,
+      assessmentTask: ASSESSMENT_TASK,
+      prosecutionTask,
+      debateTask,
+      judgeTask,
+    });
   });
 });

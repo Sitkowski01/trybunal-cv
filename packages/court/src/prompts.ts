@@ -132,3 +132,29 @@ export function judgeTask(state: TrialState, verdict: Verdict): string {
     "\n\nNapisz uzasadnienie werdyktu dla kandydata."
   );
 }
+
+/**
+ * Komplet promptow rozprawy. Rozprawa dostaje go w calosci, zeby ewaluacje mogly porownac wersje
+ * na tym samym zbiorze CV. Zmiana tresci = nowa wersja; stara zostaje do porownania.
+ */
+export interface PromptSet {
+  readonly version: string;
+  readonly rules: string;
+  readonly instructionsFor: (critic: Critic) => string;
+  readonly judgeInstructions: string;
+  readonly assessmentTask: string;
+  readonly prosecutionTask: (state: TrialState) => string;
+  readonly debateTask: (state: TrialState, criticId: CriticId) => string;
+  readonly judgeTask: (state: TrialState, verdict: Verdict) => string;
+}
+
+export const PROMPTS: PromptSet = {
+  version: "v1",
+  rules: RULES,
+  instructionsFor,
+  judgeInstructions: JUDGE_INSTRUCTIONS,
+  assessmentTask: ASSESSMENT_TASK,
+  prosecutionTask,
+  debateTask,
+  judgeTask,
+};
