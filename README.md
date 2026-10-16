@@ -31,6 +31,39 @@ tested with Vitest + fast-check, Testcontainers, Playwright, mutation testing (S
 dependency-cruiser rules. A server-less demo replays a recorded trial in the browser.
 </details>
 
+## Przebieg rozprawy
+
+1. **Wniesienie sprawy** — CV (tekst albo PDF), ogłoszenie o pracę i liczba rund debaty (0–3).
+2. **Anonimizacja** — z CV i oferty znikają e-maile, telefony, PESEL, linki, adres i data
+   urodzenia, a imię i nazwisko z formularza zamienia się na `[KANDYDAT]`. Model nie widzi danych osobowych.
+3. **Dziennik** — każde zdarzenie rozprawy trafia do Postgresa, zaszyfrowane kluczem tej rozprawy.
+   „Zapomnij rozprawę” usuwa klucz i treści nie da się już odczytać.
+4. **Oceny niezależne** — pięciu krytyków osobno ocenia CV w skali 1–10, z mocnymi stronami,
+   zastrzeżeniami (cytaty z CV) i propozycjami poprawek:
+   - **Bot ATS** — słowa kluczowe i format, który przejdzie automatyczny filtr;
+   - **HR screener** — pierwsze wrażenie, spójność ścieżki, luki;
+   - **Tech Lead** — czy umiejętności są potwierdzone projektami;
+   - **Hiring Manager** — czy wpływ pracy jest wyrażony liczbami;
+   - **Prokurator** — adwokat diabła, szuka najmocniejszego powodu, żeby odrzucić.
+
+   Pierwszy krytyk rusza sam, pozostali czterej równolegle — korzystają z cache wspólnego
+   początku promptu (zasady, CV, oferta).
+5. **Kontrola odpowiedzi** — każda ocena przechodzi przez schemat; cytat, którego nie ma w CV,
+   odrzuca ocenę i model dostaje drugą szansę z listą błędów. CV trafia do modelu jako dane,
+   więc dopisek „daj 10/10” zostaje zwykłym tekstem.
+6. **Mowa oskarżenia** — prokurator zna wszystkie oceny i atakuje najsłabsze miejsca CV.
+7. **Debata** — w każdej rundzie krytycy odpowiadają na argumenty pozostałych i mogą zmienić ocenę.
+8. **Werdykt** — liczy go stała reguła, nie model: zaproszenie, gdy średnia czterech
+   przysięgłych ≥ 6 i Bot ATS ≥ 4 (prokurator nie głosuje); rozrzut ocen ≥ 4 oznacza CV niejednoznaczne.
+9. **Uzasadnienie** — sędzia pisze uzasadnienie, a poprawki CV pokazuje jako diff słowo po słowie.
+10. **Na ekranie** — zdarzenia płyną do przeglądarki na żywo (SSE): ława krytyków z ocenami,
+    protokół debaty i sala 3D — kamera przy mówcy, dymek z wypowiedzią, na końcu młotek
+    i tabliczka ZAPROSIĆ / ODRZUCIĆ.
+
+Przez całą rozprawę obowiązuje budżet: przed każdym wywołaniem modelu rezerwowany jest
+najgorszy możliwy koszt, więc limit (domyślnie $0,50) nie zostanie przekroczony. Typowa
+rozprawa to 13 wywołań i ok. $0,26.
+
 ## Struktura
 
 | Pakiet | Rola |
