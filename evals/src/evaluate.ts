@@ -1,10 +1,10 @@
 import { posix } from "node:path";
-import { BudgetedLlmClient, formatUsd, type LlmClient } from "@trybunal/llm";
+import { BudgetExceededError, BudgetedLlmClient, formatUsd, type LlmClient } from "@trybunal/llm";
 import { parseRunArgs, UsageError } from "./args.js";
 import { heuristicLlm } from "./heuristic.js";
-import { type EvalsIo, readDataset } from "./io.js";
-import { type Meta, reportMeta } from "./meta.js";
-import { outcomeKey, relabel } from "./outcome.js";
+import { type EvalsIo, readDataset, readOptional } from "./io.js";
+import { type Meta, MetaSchema, reportMeta } from "./meta.js";
+import { latestOutcomes, outcomeKey, parseOutcomes, relabel } from "./outcome.js";
 import { renderReport } from "./report.js";
 import { jobKey, planJobs, runEvals } from "./run.js";
 
@@ -22,9 +22,23 @@ export async function evaluate(argv: readonly string[], io: EvalsIo): Promise<nu
     cases = cases.filter((c) => wanted.includes(c.id));
   }
 
+  // Wznowienie: te same parametry co zapisane, a gotowe rozprawy pomijamy.
   const metaPath = posix.join(args.out, "meta.json");
   const outcomesPath = posix.join(args.out, "outcomes.jsonl");
-  const meta: Meta = { llm: args.llm, repeats: args.repeats, debateRounds: args.debateRounds, startedAt: io.now().toISOString(), dataset: args.dataset, spentNanoUsd: 0 };
+  const savedMeta = await readOptional(io, metaPath);
+  const meta: Meta =
+    savedMeta === null
+      ? { llm: args.llm, repeats: args.repeats, debateRounds: args.debateRounds, startedAt: io.now().toISOString(), dataset: args.dataset, spentNanoUsd: 0 }
+      : MetaSchema.parse(JSON.parse(savedMeta));
+  if (meta.llm !== args.llm || meta.debateRounds !== args.debateRounds) {
+    throw new UsageError(`${args.out} zawiera przebieg z innymi parametrami (llm ${meta.llm}, rundy ${String(meta.debateRounds)}) — wybierz inny katalog`);
+  }
+  const previous = latestOutcomes(parseOutcomes((await readOptional(io, outcomesPath)) ?? ""));
+  // Limit dotyczy calego katalogu: wznowienie dostaje tylko to, co zostalo.
+  const remaining = args.totalLimitNanoUsd - meta.spentNanoUsd;
+  if (remaining <= 0) {
+    throw new UsageError(`Budzet wyczerpany: w ${args.out} wydano juz ${formatUsd(meta.spentNanoUsd)} z limitu ${formatUsd(args.totalLimitNanoUsd)} — podnies --budget-usd`);
+  }
 
   let source: LlmClient;
   if (args.llm === "heuristic") {
@@ -40,17 +54,33 @@ export async function evaluate(argv: readonly string[], io: EvalsIo): Promise<nu
   } catch (error) {
     throw new UsageError(`Nie mozna utworzyc katalogu ${args.out}: ${(error as Error).message}`);
   }
-  // Budzet calego przebiegu jest wspolny dla wszystkich rozpraw.
-  const total = new BudgetedLlmClient(source, args.totalLimitNanoUsd);
-  const currentMeta = (): Meta => ({ ...meta, spentNanoUsd: total.spentNanoUsd });
+  // Budzet calego przebiegu jest wspolny; jego wyczerpanie zatrzymuje ewaluacje, a nie ocenia CV.
+  const total = new BudgetedLlmClient(source, remaining);
+  // Wiecej powtorzen przy wznowieniu dopisuje kolejne; mniej niczego nie kasuje.
+  const currentMeta = (): Meta => ({ ...meta, repeats: Math.max(meta.repeats, args.repeats), spentNanoUsd: meta.spentNanoUsd + total.spentNanoUsd });
   const saveMeta = () => io.writeText(metaPath, `${JSON.stringify(currentMeta(), null, 2)}\n`);
   await saveMeta();
+  const budget = { exhausted: false };
+  const guarded: LlmClient = {
+    generate: async (request, signal) => {
+      try {
+        return await total.generate(request, signal);
+      } catch (error) {
+        if (error instanceof BudgetExceededError) budget.exhausted = true;
+        throw error;
+      }
+    },
+  };
 
   const plan = { cases, variants: args.variants, repeats: args.repeats, debateRounds: args.debateRounds };
-  io.log(`Ewaluacja: ${String(cases.length)} przypadkow x ${String(args.variants.length)} wariantow x ${String(args.repeats)} powtorzen`);
+  // --retry-aborted: przerwane rozprawy (np. limit jednej rozprawy) ida jeszcze raz; nowy wynik zastapi stary.
+  const done = new Set(previous.filter((o) => !args.retryAborted || o.decision !== null).map(outcomeKey));
+  io.log(`Ewaluacja: ${String(cases.length)} przypadkow x ${String(args.variants.length)} wariantow x ${String(args.repeats)} powtorzen; gotowe wczesniej: ${String(done.size)}`);
   const fresh = await runEvals(plan, {
-    llmFor: () => new BudgetedLlmClient(total, args.trialLimitNanoUsd),
+    llmFor: () => new BudgetedLlmClient(guarded, args.trialLimitNanoUsd),
     concurrency: args.concurrency,
+    done,
+    halted: () => budget.exhausted,
     ...(io.signal === undefined ? {} : { signal: io.signal }),
     onOutcome: async (o) => {
       await io.appendText(outcomesPath, `${JSON.stringify(o)}\n`);
@@ -60,12 +90,16 @@ export async function evaluate(argv: readonly string[], io: EvalsIo): Promise<nu
   });
 
   await saveMeta();
-  const outcomes = fresh;
+  const outcomes = latestOutcomes([...previous, ...fresh]);
   await io.writeText(posix.join(args.out, "report.md"), renderReport(reportMeta(currentMeta(), args.out), relabel(outcomes, cases)));
-  io.log(`Wydano ${formatUsd(total.spentNanoUsd)}. Raport: ${posix.join(args.out, "report.md")}`);
+  io.log(`Wydano ${formatUsd(total.spentNanoUsd)} (w katalogu lacznie ${formatUsd(currentMeta().spentNanoUsd)}). Raport: ${posix.join(args.out, "report.md")}`);
   const have = new Set(outcomes.map(outcomeKey));
   if (planJobs(plan).some((job) => !have.has(jobKey(job)))) {
-    io.log("Przebieg niepelny.");
+    io.log(
+      budget.exhausted
+        ? "Budzet przebiegu wyczerpany (zapytania rezerwuja najgorszy koszt, wiec stop moze przyjsc przed limitem) — dokoncz tym samym poleceniem z wiekszym --budget-usd; limit liczy sie dla calego katalogu."
+        : "Przebieg niepelny — uruchom to samo polecenie, zeby dokonczyc.",
+    );
     return 1;
   }
   return 0;
