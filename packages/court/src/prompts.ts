@@ -39,12 +39,20 @@ export function documents(state: TrialState) {
   ];
 }
 
+/**
+ * Koncowe polecenia zadan i postawa prokuratora jako stale: wariant promptow w ewaluacjach
+ * podmienia je w calosci, a reszta promptu (przebieg, oceny) zostaje ta sama.
+ */
+export const PROSECUTOR_STANCE = "Jesteś prokuratorem: szukasz najmocniejszego powodu, żeby kandydata odrzucić. Bądź surowy, ale uczciwy.";
+export const JUROR_STANCE = "Jesteś przysięgłym: oceniasz niezależnie i uczciwie, z perspektywy swojej roli.";
+export const PROSECUTION_ASK = "Wygłoś mowę oskarżenia: najmocniejsze argumenty za odrzuceniem kandydata, oparte na cytatach z CV.";
+export const DEBATE_ASK =
+  "Odnieś się do argumentów innych. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null.";
+export const JUDGE_ASK = "Napisz uzasadnienie werdyktu dla kandydata.";
+
 export function instructionsFor(critic: Critic): string {
   const rubric = critic.criteria.map((c) => `- ${c}`).join("\n");
-  const stance =
-    critic.role === "prosecutor"
-      ? "Jesteś prokuratorem: szukasz najmocniejszego powodu, żeby kandydata odrzucić. Bądź surowy, ale uczciwy."
-      : "Jesteś przysięgłym: oceniasz niezależnie i uczciwie, z perspektywy swojej roli.";
+  const stance = critic.role === "prosecutor" ? PROSECUTOR_STANCE : JUROR_STANCE;
   return `Twoja rola: ${critic.name}. Patrzysz na: ${critic.focus}.\n${stance}\nTwoja rubryka:\n${rubric}`;
 }
 
@@ -87,7 +95,7 @@ function debateLines(state: TrialState): string[] {
 export function prosecutionTask(state: TrialState): string {
   return (
     `Niezależne oceny krytyków:\n${wrap(bySeat(state).flatMap(assessmentLines))}\n\n` +
-    "Wygłoś mowę oskarżenia: najmocniejsze argumenty za odrzuceniem kandydata, oparte na cytatach z CV."
+    PROSECUTION_ASK
   );
 }
 
@@ -104,7 +112,7 @@ export function debateTask(state: TrialState, criticId: CriticId): string {
     `${wrap(record)}\n\n` +
     `Runda ${String(state.round)}. Twoja kolej (${criticById(criticId).name})` +
     (mine === null ? ". " : `, twoja aktualna ocena: ${String(mine)}/10. `) +
-    "Odnieś się do argumentów innych. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null."
+    DEBATE_ASK
   );
 }
 
@@ -129,7 +137,7 @@ export function judgeTask(state: TrialState, verdict: Verdict): string {
     `Rozrzut ocen: ${String(verdict.spread)}${verdict.disputed ? " (CV niejednoznaczne)" : ""}. ` +
     (verdict.atsGateFailed ? "CV nie przeszło filtra ATS. " : "") +
     (changes.length > 0 ? `Zmiany zdania w debacie: ${changes.join("; ")}. ` : "") +
-    "\n\nNapisz uzasadnienie werdyktu dla kandydata."
+    `\n\n${JUDGE_ASK}`
   );
 }
 
