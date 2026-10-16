@@ -1,0 +1,44 @@
+import { describe, expect, it } from "vitest";
+import { renderReport } from "./report.js";
+import { aborted, outcome } from "./test/fixtures.js";
+
+const meta = { title: "Ewaluacja testowa", date: "2026-10-16", repeats: 2, debateRounds: 1, llm: "atrapa", spentNanoUsd: 250_000_000 };
+
+describe("renderReport", () => {
+  it("tabela metryk, tagi, przypadki do obejrzenia i roznice miedzy wariantami", () => {
+    const rows = [
+      outcome({ caseId: "a", repeat: 0, decision: "invite", juryAverage: 7, costNanoUsd: 40_000_000, cacheReadTokens: 100 }),
+      outcome({ caseId: "a", repeat: 1, decision: "reject", juryAverage: 5, costNanoUsd: 60_000_000 }),
+      outcome({ caseId: "b", repeat: 0, expected: "reject", tags: ["zawyzone"], decision: "invite", failedAttempts: 3 }),
+      aborted({ caseId: "b", repeat: 1, expected: "reject", tags: ["zawyzone"] }),
+      outcome({ variant: "v2", caseId: "a", decision: "invite" }),
+      outcome({ variant: "v2", caseId: "b", expected: "reject", tags: ["zawyzone"], decision: "reject" }),
+    ];
+    expect(renderReport(meta, rows)).toMatchSnapshot();
+  });
+
+  it("trafnosc bez przypadkow granicznych liczona osobno", () => {
+    const text = renderReport(meta, [outcome(), outcome({ caseId: "g", tags: ["graniczny"], decision: "reject" })]);
+    expect(text).toContain("| Trafność werdyktu | 50% |");
+    expect(text).toContain("| Trafność bez przypadków granicznych | 100% |");
+  });
+
+  it("jeden wariant: bez sekcji roznic; brak danych jako kreska", () => {
+    const text = renderReport(meta, [aborted({ costNanoUsd: 0, attempts: 0, inputTokens: 0 })]);
+    expect(text).not.toContain("→");
+    expect(text).toContain("| Trafność werdyktu | — |");
+    expect(text).toContain("chybione (werdykt większości ≠ oczekiwany): —; niestabilne: —");
+    expect(text.endsWith("\n")).toBe(true);
+  });
+
+  it("tag bez rozpraw w jednym z wariantow: kreska w jego kolumnie", () => {
+    const text = renderReport(meta, [outcome({ tags: ["luka"] }), outcome({ variant: "v2", tags: ["mocne"] })]);
+    expect(text).toContain("| luka | 1/1 | — |");
+    expect(text).toContain("| mocne | — | 1/1 |");
+  });
+
+  it("warianty bez roznic werdyktow — mowi to wprost", () => {
+    const text = renderReport(meta, [outcome(), outcome({ variant: "v2" })]);
+    expect(text).toContain("## v1 → v2: przypadki ze zmienionym werdyktem\n\nBrak — oba warianty ogłaszają te same werdykty większości.");
+  });
+});

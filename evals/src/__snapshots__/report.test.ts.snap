@@ -1,0 +1,45 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderReport > tabela metryk, tagi, przypadki do obejrzenia i roznice miedzy wariantami 1`] = `
+"# Ewaluacja testowa
+
+2026-10-16 · atrapa · przypadki: 2 · powtórzenia: 2 · rundy debaty: 1
+
+Wydano łącznie: $0.2500 (z rozprawami przerwanymi przez budżet przebiegu albo Ctrl+C, których wyników nie zapisano).
+
+## Metryki
+
+| Metryka | v1 | v2 |
+| --- | --- | --- |
+| Rozprawy (zakończone / wszystkie) | 3 / 4 | 2 / 2 |
+| Trafność werdyktu | 33% | 100% |
+| Trafność bez przypadków granicznych | 33% | 100% |
+| Fałszywe zaproszenia (oczekiwano odrzucenia) | 1 | 0 |
+| Fałszywe odrzucenia (oczekiwano zaproszenia) | 1 | 0 |
+| Zgodność powtórzeń | 50% | — |
+| Odchylenie średniej przysięgłych | 1.00 | — |
+| Koszt łącznie | $0.1001 | $0.0001 |
+| Koszt rozprawy (średni / maks.) | $0.0251 / $0.0600 | $0.0001 / $0.0001 |
+| Wejście z cache | 20% | 0% |
+| Ponowione zapytania | 6% | 0% |
+
+## Trafność według tagów (trafione / zakończone)
+
+| Tag | v1 | v2 |
+| --- | --- | --- |
+| mocne | 1/2 | 1/1 |
+| zawyzone | 0/1 | 1/1 |
+
+## Przypadki do obejrzenia
+
+- **v1** — chybione (werdykt większości ≠ oczekiwany): a, b; niestabilne: a
+- **v2** — chybione (werdykt większości ≠ oczekiwany): —; niestabilne: —
+
+## v1 → v2: przypadki ze zmienionym werdyktem
+
+| Przypadek | Oczekiwany | v1 | v2 |
+| --- | --- | --- | --- |
+| a | invite | reject | invite |
+| b | reject | invite | reject |
+"
+`;
