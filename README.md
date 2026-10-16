@@ -5,7 +5,7 @@ HR screener, Tech Lead, Hiring Manager i Prokurator — ocenia kandydata, spiera
 w debacie, a sędzia ogłasza werdykt z uzasadnieniem i poprawionymi punktami CV.
 Rozprawę widać na żywo jako animowaną scenę 3D.
 
-![Obsada trybunału: Bot ATS, HR, Tech Lead, Sędzia, Hiring Manager i smok-Prokurator](assets/blender/lineup.png)
+![Nagrana rozprawa na Claude: debata przysięgłych i werdykt ZAPROSIĆ](docs/demo.gif)
 
 ```bash
 docker compose up --build    # http://localhost:8080 — Postgres, API i frontend; bez klucza próba generalna
@@ -145,6 +145,8 @@ reguły oraz uzasadnienie na piśmie — poprawki CV jako diff słowo po słowie
 
 ## Postacie
 
+![Obsada trybunału: Bot ATS, HR, Tech Lead, Sędzia, Hiring Manager i smok-Prokurator](assets/blender/lineup.png)
+
 Czterech krytyków to roboty, Prokurator to smok, a Sędzia — większy robot w todze z fioletowym
 żabotem i łańcuchem. Każda postać ma własny kolor, mimikę na ekranie-twarzy, symbol na piersi
 i rekwizyt, żeby była czytelna z drugiego końca sali.
@@ -215,6 +217,8 @@ odtwarzają nagraną rozprawę — bez API, bazy i modelu, pod dowolną ścieżk
   bez zmian. Przerwanie rozprawy kończy ją zdarzeniem `TrialAborted`, jak na serwerze.
 - **Tempo czytania, nie modelu.** Prawdziwe odstępy to czas odpowiedzi API; w demo przerwa po zdarzeniu
   zależy od długości tekstu, żeby widz zdążył przeczytać dymek (`?tempo=4` przyspiesza).
+- **Nagranie w repozytorium to prawdziwa rozprawa na Claude** nad fikcyjnym CV: 13 wywołań modelu
+  (jedno ponowienie), $0,26, werdykt ZAPROSIĆ — prokurator wytknął „Ekspert React” przy roku nauki Javy.
 - **Strona startowa zamiast formularza**: formularz przyjąłby dowolne CV, a odtworzył zawsze to samo
   nagranie. Nagranie powstaje z fikcyjnego CV z `examples/` — odpowiedzi modelu cytują CV.
 
