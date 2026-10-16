@@ -9,9 +9,10 @@ export const FIRST_EVENT_MS = 300;
 /** Krytycy czytaja akta — scena pokazuje to, zanim przyjdzie pierwsza ocena. */
 export const READING_FILES_MS = 2500;
 export const AFTER_ASSESSMENT_MS = 1200;
-export const MS_PER_CHAR = 35;
-export const MIN_SPEECH_MS = 2000;
-export const MAX_SPEECH_MS = 7000;
+/** Ok. 22 znaki na sekunde — spokojne czytanie dymka; dluzsza mowa i tak jest cala w protokole. */
+export const MS_PER_CHAR = 45;
+export const MIN_SPEECH_MS = 2500;
+export const MAX_SPEECH_MS = 14_000;
 
 const reading = (text: string) => Math.min(MAX_SPEECH_MS, Math.max(MIN_SPEECH_MS, text.length * MS_PER_CHAR));
 

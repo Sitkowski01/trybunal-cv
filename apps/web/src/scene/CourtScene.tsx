@@ -26,6 +26,18 @@ const url = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
 const VERDICT = { invite: "ZAPROSIĆ", reject: "ODRZUCIĆ" } as const;
 
+/**
+ * Wczytuje sale i postacie zawczasu (ta sama pamiec podreczna co useLoader w Court) — demo wola to
+ * na stronie startowej, zeby rozprawa ruszyla bez przyciecia na pobieraniu i dekodowaniu modeli.
+ */
+export function preloadScene(): void {
+  useLoader.preload(GLTFLoader, url(COURTROOM_URL));
+  useLoader.preload(
+    GLTFLoader,
+    CHARACTER_IDS.map((id) => url(modelUrl(id))),
+  );
+}
+
 export default function CourtScene({ direction, reducedMotion, lowPower }: CourtSceneProps) {
   const bubble = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);

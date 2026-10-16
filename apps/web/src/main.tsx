@@ -18,6 +18,12 @@ const { api, sources } = demo
   ? createReplay(readRecording((await import("./demo/recording.sse?raw")).default), speedFromSearch(window.location.search))
   : { api: createApi((input, init) => fetch(input, init)), sources: (url: string) => new EventSource(url) };
 const scene = detectSceneSupport(window);
+// Demo: sala 3D wczytuje sie w tle juz na stronie startowej — po kliknieciu rozprawa rusza plynnie.
+if (demo && scene !== null) {
+  void import("./scene/CourtScene.js").then((module) => {
+    module.preloadScene();
+  });
+}
 
 createRoot(root).render(
   <StrictMode>
