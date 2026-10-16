@@ -1,0 +1,8 @@
+{
+  "llm": "anthropic",
+  "repeats": 1,
+  "debateRounds": 1,
+  "startedAt": "2026-10-16T17:14:08.900Z",
+  "dataset": "evals/dataset",
+  "spentNanoUsd": 12075199540
+}
