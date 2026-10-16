@@ -89,6 +89,21 @@ describe("summarize", () => {
     expect(s.retryRate).toBe(4 / 20);
   });
 
+  it("nieudane proby wedlug kroku i powodu: sumy z rozpraw wariantu, od najczestszych, remis alfabetycznie", () => {
+    // Kolejnosc wystapienia celowo inna niz wynikowa.
+    const s = summarize("v1", [
+      outcome({ failures: { "statement:hr/incomplete": 1, "prosecution/invalid": 1 } }),
+      aborted({ failures: { "assessment:ats/rejected": 3 } }),
+      outcome({ variant: "v2", failures: { "justification/transport": 5 } }),
+    ]);
+    expect(s.failures).toEqual([
+      { key: "assessment:ats/rejected", count: 3 },
+      { key: "prosecution/invalid", count: 1 },
+      { key: "statement:hr/incomplete", count: 1 },
+    ]);
+    expect(summarize("v1", [outcome()]).failures).toEqual([]);
+  });
+
   it("wlasnosc: trafne + chybione = zakonczone, a trafnosc i zgodnosc mieszcza sie w [0, 1]", () => {
     const arbOutcome = fc.record({
       caseId: fc.constantFrom("a", "b", "c"),

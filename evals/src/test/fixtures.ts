@@ -31,6 +31,7 @@ export const outcome = (over: Partial<TrialOutcome> = {}): TrialOutcome => ({
   costNanoUsd: 1000,
   attempts: 12,
   failedAttempts: 0,
+  failures: {},
   inputTokens: 100,
   outputTokens: 50,
   cacheWriteTokens: 0,

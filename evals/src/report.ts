@@ -52,6 +52,30 @@ function tagTable(summaries: readonly VariantSummary[]): string[] {
   );
 }
 
+/** Powod nieudanej proby po ludzku (CallRecord.outcome z orkiestracji). */
+const REASONS: Readonly<Record<string, string>> = {
+  rejected: "cytat spoza CV",
+  invalid: "zły schemat odpowiedzi",
+  incomplete: "limit tokenów",
+  transport: "błąd API",
+};
+
+/** Klucz "krok/powod" (zob. countFailures); powod bez opisu zostaje jak jest. */
+const describeFailure = (key: string) => {
+  const slash = key.lastIndexOf("/");
+  const reason = key.slice(slash + 1);
+  return `${key.slice(0, slash)} — ${REASONS[reason] ?? reason}`;
+};
+
+/** Skad biora sie ponowienia: krok i powod, liczba nieudanych prob w kazdym wariancie. */
+function failureTable(summaries: readonly VariantSummary[]): string[] {
+  const keys = [...new Set(summaries.flatMap((s) => s.failures.map((f) => f.key)))];
+  return table(
+    ["Krok — powód", ...summaries.map((s) => s.variant)],
+    keys.map((key) => [describeFailure(key), ...summaries.map((s) => String(s.failures.find((f) => f.key === key)?.count ?? 0))]),
+  );
+}
+
 export interface ReportMeta {
   readonly title: string;
   readonly date: string;
@@ -85,6 +109,8 @@ export function renderReport(meta: ReportMeta, outcomes: readonly TrialOutcome[]
     "",
     ...tagTable(summaries),
     "",
+    // Tylko gdy cos sie nie udalo — raporty bez ponowien (heurystyka) zostaja bez zmian.
+    ...(summaries.some((s) => s.failures.length > 0) ? ["## Nieudane próby według kroku i powodu", "", ...failureTable(summaries), ""] : []),
     "## Przypadki do obejrzenia",
     "",
     ...summaries.flatMap((s) => [

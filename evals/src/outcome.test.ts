@@ -2,7 +2,7 @@ import { runTrial } from "@trybunal/court";
 import { FakeLlmClient, type FakeScript, LlmTransportError, raw } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { heuristicScript } from "./heuristic.js";
-import { latestOutcomes, OutcomeSchema, outcomeKey, parseOutcomes, relabel, toOutcome } from "./outcome.js";
+import { countFailures, latestOutcomes, OutcomeSchema, outcomeKey, parseOutcomes, relabel, stepOf, toOutcome } from "./outcome.js";
 import { evalCase, outcome } from "./test/fixtures.js";
 
 const usage = { inputTokens: 100, outputTokens: 20, cacheWriteTokens: 30, cacheReadTokens: 40 };
@@ -35,6 +35,7 @@ describe("toOutcome", () => {
       juryAverage: run.state.verdict?.juryAverage,
       attempts: 13,
       failedAttempts: 1,
+      failures: { "assessment:hr/invalid": 1 },
       inputTokens: 1300,
       outputTokens: 260,
       cacheWriteTokens: 390,
@@ -50,7 +51,7 @@ describe("toOutcome", () => {
   it("przerwana rozprawa: bez werdyktu i ocen, z powodem i kosztem prob", async () => {
     const run = await trial((req, i) => (req.label === "prosecution" ? raw("zle") : heuristicScript(req, i)));
     const o = toOutcome(c, "v1", 0, run);
-    expect(o).toMatchObject({ decision: null, juryAverage: null, initialScores: null, finalScores: null, failedAttempts: 3 });
+    expect(o).toMatchObject({ decision: null, juryAverage: null, initialScores: null, finalScores: null, failedAttempts: 3, failures: { "prosecution/invalid": 3 } });
     expect(o.abortReason).toContain("prosecution");
     expect(o.costNanoUsd).toBeGreaterThan(0);
   });
@@ -67,6 +68,31 @@ describe("toOutcome", () => {
     const o = toOutcome(c, "v1", 0, run);
     expect(run.calls.some((call) => call.usage === null)).toBe(true);
     expect(o.inputTokens).toBe(100 * run.calls.filter((call) => call.usage !== null).length);
+  });
+});
+
+describe("stepOf i countFailures", () => {
+  it("krok bez numeru rundy; etykiety bez rundy bez zmian", () => {
+    expect(stepOf("statement:1:ats")).toBe("statement:ats");
+    expect(stepOf("statement:12:hiringManager")).toBe("statement:hiringManager");
+    expect(stepOf("assessment:ats")).toBe("assessment:ats");
+    expect(stepOf("prosecution")).toBe("prosecution");
+    expect(stepOf("krok:7")).toBe("krok");
+  });
+
+  it("liczy tylko nieudane proby, wedlug kroku i powodu; rundy debaty sumuja sie w jednym kroku", () => {
+    const call = (label: string, outcome: "ok" | "rejected" | "invalid" | "incomplete" | "transport") =>
+      ({ label, attempt: 1, model: "claude-sonnet-5-5", outcome, usage: null, costNanoUsd: 0, costKnown: true, durationMs: 0 }) as const;
+    expect(
+      countFailures([call("assessment:ats", "rejected"), call("assessment:ats", "rejected"), call("assessment:ats", "ok"), call("statement:1:hr", "incomplete"), call("statement:2:hr", "incomplete"), call("prosecution", "transport")]),
+    ).toEqual({ "assessment:ats/rejected": 2, "statement:hr/incomplete": 2, "prosecution/transport": 1 });
+    expect(countFailures([call("prosecution", "ok")])).toEqual({});
+  });
+
+  it("wynik zapisany przed polem failures czyta sie z pustym slownikiem", () => {
+    const old: Record<string, unknown> = { ...outcome() };
+    delete old.failures;
+    expect(OutcomeSchema.parse(old).failures).toEqual({});
   });
 });
 

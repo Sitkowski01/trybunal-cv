@@ -26,6 +26,14 @@ export interface VariantSummary {
   readonly cacheHitRatio: number | null;
   /** Nieudane proby (zly JSON, zmyslony cytat, przeciazenie) / wszystkie proby. */
   readonly retryRate: number | null;
+  /** Nieudane proby wedlug kroku i powodu, od najczestszych. */
+  readonly failures: readonly Failure[];
+}
+
+export interface Failure {
+  /** Krok i powod, np. "assessment:ats/rejected". */
+  readonly key: string;
+  readonly count: number;
 }
 
 export interface TagAccuracy {
@@ -130,7 +138,14 @@ export function summarize(variant: string, all: readonly TrialOutcome[]): Varian
     },
     cacheHitRatio: ratio(sum((o) => o.cacheReadTokens), allInput),
     retryRate: ratio(sum((o) => o.failedAttempts), sum((o) => o.attempts)),
+    failures: failuresOf(outcomes),
   };
+}
+
+function failuresOf(outcomes: readonly TrialOutcome[]): Failure[] {
+  const counts = new Map<string, number>();
+  for (const o of outcomes) for (const [key, n] of Object.entries(o.failures)) counts.set(key, (counts.get(key) ?? 0) + n);
+  return [...counts].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
 }
 
 /** Warianty w kolejnosci pierwszego wystapienia w wynikach. */

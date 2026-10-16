@@ -23,6 +23,20 @@ describe("renderReport", () => {
     expect(text).toContain("| Trafność bez przypadków granicznych | 100% |");
   });
 
+  it("nieudane proby: krok i powod po ludzku, liczby w kazdym wariancie; bez nieudanych prob sekcji nie ma", () => {
+    const text = renderReport(meta, [
+      outcome({ failures: { "assessment:ats/rejected": 2, "statement:hr/incomplete": 1, "prosecution/invalid": 1, "justification/transport": 1, "x/inne": 1 } }),
+      outcome({ variant: "v2" }),
+    ]);
+    expect(text).toContain("## Nieudane próby według kroku i powodu\n\n| Krok — powód | v1 | v2 |\n| --- | --- | --- |\n| assessment:ats — cytat spoza CV | 2 | 0 |\n");
+    expect(text).toContain("| statement:hr — limit tokenów | 1 | 0 |");
+    expect(text).toContain("| prosecution — zły schemat odpowiedzi | 1 | 0 |");
+    expect(text).toContain("| justification — błąd API | 1 | 0 |");
+    // Pusta linia przed nastepna sekcja, jak w calym raporcie.
+    expect(text).toContain("| x — inne | 1 | 0 |\n\n## Przypadki do obejrzenia");
+    expect(renderReport(meta, [outcome()])).not.toContain("Nieudane próby");
+  });
+
   it("jeden wariant: bez sekcji roznic; brak danych jako kreska", () => {
     const text = renderReport(meta, [aborted({ costNanoUsd: 0, attempts: 0, inputTokens: 0 })]);
     expect(text).not.toContain("→");

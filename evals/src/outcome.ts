@@ -26,6 +26,11 @@ export const OutcomeSchema = z.strictObject({
   costNanoUsd: count,
   attempts: count,
   failedAttempts: count,
+  /**
+   * Nieudane proby wedlug kroku i powodu, np. { "assessment:ats/rejected": 1 } — skad biora sie
+   * ponowienia. Wyniki sprzed tego pola maja pusty slownik.
+   */
+  failures: z.record(z.string(), count).default({}),
   inputTokens: count,
   outputTokens: count,
   cacheWriteTokens: count,
@@ -36,6 +41,20 @@ export type TrialOutcome = z.infer<typeof OutcomeSchema>;
 
 /** Klucz przebiegu: ten sam przypadek, wariant i powtorzenie liczymy raz. */
 export const outcomeKey = (o: Pick<TrialOutcome, "caseId" | "variant" | "repeat">) => `${o.variant}/${o.caseId}/${String(o.repeat)}`;
+
+/** Krok rozprawy bez numeru rundy: "statement:1:ats" -> "statement:ats". */
+export const stepOf = (label: string) => label.replace(/:\d+(?=:|$)/gu, "");
+
+/** Nieudane proby policzone wedlug kroku i powodu (ok sie nie liczy). */
+export function countFailures(calls: TrialRun["calls"]): Record<string, number> {
+  const failures: Record<string, number> = {};
+  for (const call of calls) {
+    if (call.outcome === "ok") continue;
+    const key = `${stepOf(call.label)}/${call.outcome}`;
+    failures[key] = (failures[key] ?? 0) + 1;
+  }
+  return failures;
+}
 
 export function toOutcome(evalCase: EvalCase, variant: string, repeat: number, run: TrialRun): TrialOutcome {
   const { state, calls } = run;
@@ -55,6 +74,7 @@ export function toOutcome(evalCase: EvalCase, variant: string, repeat: number, r
     costNanoUsd: calls.reduce((s, c) => s + c.costNanoUsd, 0),
     attempts: calls.length,
     failedAttempts: calls.filter((c) => c.outcome !== "ok").length,
+    failures: countFailures(calls),
     inputTokens: sum((u) => u.inputTokens),
     outputTokens: sum((u) => u.outputTokens),
     cacheWriteTokens: sum((u) => u.cacheWriteTokens),
