@@ -4,7 +4,7 @@ import { type Group, type Object3D, PMREMGenerator, Quaternion, Vector3 } from "
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { type GLTF, GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CHARACTER_IDS, type CharacterId, jointsOf, missingJoints, modelUrl } from "./characters.js";
-import { CAMERA_RATE, dampVec, toScreen, type Vec3 } from "./camera.js";
+import { CAMERA_RATE, dampVec, keepInside, toScreen, type Vec3 } from "./camera.js";
 import { COURTROOM_URL, isSeated, missingAnchors, type Shot, shotNodes, SPOTS } from "./courtroom.js";
 import type { Action, Direction } from "./direct.js";
 import { approach, type Pose, pose } from "./poses.js";
@@ -31,8 +31,10 @@ export default function CourtScene({ direction, reducedMotion, lowPower }: Court
   // Dymek to zwykly element DOM nad plotnem; co klatke przesuwamy go nad glowe mowcy.
   const placeBubble = useCallback((x: number, y: number, visible: boolean) => {
     const element = bubble.current;
-    if (element === null) return;
-    element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
+    const stage = element?.parentElement;
+    if (element == null || stage == null) return;
+    const at = keepInside({ x, y }, { width: element.offsetWidth, height: element.offsetHeight }, { width: stage.clientWidth, height: stage.clientHeight });
+    element.style.transform = `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px) translate(-50%, -100%)`;
     element.style.visibility = visible ? "visible" : "hidden";
   }, []);
   return (

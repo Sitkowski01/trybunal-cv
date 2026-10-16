@@ -671,6 +671,21 @@ select:focus-visible {
   border-top-color: var(--paper);
 }
 
+/* Telefon: sala ma ok. 200 px wysokosci — mniejszy dymek, a przycisk nad sala, nie na niej. */
+@media (max-width: 600px) {
+  .scene__bubble {
+    max-width: 85%;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.78rem;
+  }
+
+  .stage__toggle {
+    position: static;
+    display: block;
+    margin: 0 0 0.5rem auto;
+  }
+}
+
 .scene__bubble--prosecutor {
   border: 2px solid var(--reject);
 }

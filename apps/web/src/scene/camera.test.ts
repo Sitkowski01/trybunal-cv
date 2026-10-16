@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { damp, dampVec, EDGE, toScreen } from "./camera.js";
+import { BUBBLE_MARGIN, damp, dampVec, EDGE, keepInside, toScreen } from "./camera.js";
 
 describe("damp", () => {
   it("rusza z miejsca w strone celu, a przy dt = nieskonczonosc przeskakuje", () => {
@@ -22,6 +22,27 @@ describe("damp", () => {
     expect(dampVec([0, 10, -4], [10, 10, 4], 2, Number.POSITIVE_INFINITY)).toEqual([10, 10, 4]);
     const [x, y, z] = dampVec([0, 10, -4], [10, 10, 4], 2, 0.5);
     expect([x, y, z].map((v) => Number(v.toFixed(6)))).toEqual([damp(0, 10, 2, 0.5), 10, damp(-4, 4, 2, 0.5)].map((v) => Number(v.toFixed(6))));
+  });
+});
+
+describe("keepInside", () => {
+  const stage = { width: 360, height: 200 };
+  const bubble = { width: 200, height: 80 };
+
+  it("dymek mieszczacy sie w sali zostaje nad glowa", () => {
+    expect(keepInside({ x: 180, y: 120 }, bubble, stage)).toEqual({ x: 180, y: 120 });
+    expect(BUBBLE_MARGIN).toBe(8);
+  });
+
+  it("wysoki dymek nad gorna krawedzia schodzi w dol; przy bokach przesuwa sie do srodka", () => {
+    expect(keepInside({ x: 180, y: 30 }, bubble, stage)).toEqual({ x: 180, y: 88 });
+    expect(keepInside({ x: 20, y: 120 }, bubble, stage)).toEqual({ x: 108, y: 120 });
+    expect(keepInside({ x: 340, y: 120 }, bubble, stage)).toEqual({ x: 252, y: 120 });
+    expect(keepInside({ x: 180, y: 199 }, bubble, stage)).toEqual({ x: 180, y: 192 });
+  });
+
+  it("dymek wiekszy niz sala: widac lewa i gorna krawedz (poczatek tekstu)", () => {
+    expect(keepInside({ x: 180, y: 100 }, { width: 400, height: 250 }, stage)).toEqual({ x: 208, y: 258 });
   });
 });
 
