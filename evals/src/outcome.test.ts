@@ -2,8 +2,8 @@ import { runTrial } from "@trybunal/court";
 import { FakeLlmClient, type FakeScript, LlmTransportError, raw } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { heuristicScript } from "./heuristic.js";
-import { OutcomeSchema, outcomeKey, toOutcome } from "./outcome.js";
-import { evalCase } from "./test/fixtures.js";
+import { latestOutcomes, OutcomeSchema, outcomeKey, parseOutcomes, relabel, toOutcome } from "./outcome.js";
+import { evalCase, outcome } from "./test/fixtures.js";
 
 const usage = { inputTokens: 100, outputTokens: 20, cacheWriteTokens: 30, cacheReadTokens: 40 };
 const c = evalCase({ id: "c7", expected: "reject", tags: ["ats", "slabe"] });
@@ -70,8 +70,38 @@ describe("toOutcome", () => {
   });
 });
 
-describe("outcomeKey", () => {
+describe("outcomeKey i parseOutcomes", () => {
   it("klucz z wariantu, przypadku i powtorzenia", () => {
     expect(outcomeKey({ caseId: "a", variant: "v1", repeat: 2 })).toBe("v1/a/2");
+  });
+
+  it("czyta JSONL, pomija puste linie i wskazuje zly wiersz po numerze w pliku", () => {
+    const line = JSON.stringify(outcome());
+    expect(parseOutcomes(`${line}\n\n${line}\n`)).toEqual([outcome(), outcome()]);
+    expect(parseOutcomes("")).toEqual([]);
+    expect(() => parseOutcomes(`${line}\n\n${JSON.stringify({ ...outcome(), decision: "maybe" })}\n`)).toThrow(/^Wiersz 3: /);
+    expect(() => parseOutcomes(`${JSON.stringify({ ...outcome(), extra: 1 })}\n`)).toThrow("Wiersz 1");
+    expect(() => parseOutcomes(`${line}\n{zly json\n`)).toThrow(/^Wiersz 2: .*JSON/);
+  });
+
+  it("urwany ostatni wiersz (zabity proces) pomijany — wznowienie powtorzy te rozprawe", () => {
+    const line = JSON.stringify(outcome());
+    expect(parseOutcomes(`${line}\n${line.slice(0, 20)}`)).toEqual([outcome()]);
+    expect(parseOutcomes(line)).toEqual([]);
+  });
+});
+
+describe("latestOutcomes i relabel", () => {
+  it("pozniejszy wynik o tym samym kluczu zastepuje wczesniejszy", () => {
+    const first = outcome({ decision: null });
+    const other = outcome({ caseId: "c2" });
+    const retried = outcome({ decision: "reject" });
+    expect(latestOutcomes([first, other, retried])).toEqual([retried, other]);
+  });
+
+  it("oczekiwany werdykt i tagi z biezacego zbioru; przypadek spoza zbioru bez zmian", () => {
+    const fixed = evalCase({ id: "c1", expected: "reject", tags: ["graniczny"] });
+    const gone = outcome({ caseId: "usuniety" });
+    expect(relabel([outcome(), gone], [fixed])).toEqual([outcome({ expected: "reject", tags: ["graniczny"] }), gone]);
   });
 });

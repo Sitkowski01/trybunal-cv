@@ -61,3 +61,38 @@ export function toOutcome(evalCase: EvalCase, variant: string, repeat: number, r
     cacheReadTokens: sum((u) => u.cacheReadTokens),
   };
 }
+
+/**
+ * Plik JSONL z wynikami; puste linie pomijane. Ostatni wiersz bez znaku konca linii to zapis
+ * urwany przez zabicie procesu — pomijamy go, a wznowienie powtorzy te rozprawe.
+ */
+export function parseOutcomes(text: string): TrialOutcome[] {
+  const lines = text.split("\n");
+  if (!text.endsWith("\n")) lines.pop();
+  return lines.flatMap((line, index) => {
+    if (line.trim() === "") return [];
+    let json: unknown;
+    try {
+      json = JSON.parse(line);
+    } catch (error) {
+      throw new Error(`Wiersz ${String(index + 1)}: ${(error as Error).message}`, { cause: error });
+    }
+    const parsed = OutcomeSchema.safeParse(json);
+    if (!parsed.success) throw new Error(`Wiersz ${String(index + 1)}: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
+    return [parsed.data];
+  });
+}
+
+/** Powtorzona rozprawa (--retry-aborted) zastepuje wczesniejszy wynik o tym samym kluczu. */
+export function latestOutcomes(outcomes: readonly TrialOutcome[]): TrialOutcome[] {
+  return [...new Map(outcomes.map((o) => [outcomeKey(o), o])).values()];
+}
+
+/** Oczekiwany werdykt i tagi z biezacego zbioru — poprawiona etykieta dziala bez powtarzania rozpraw. */
+export function relabel(outcomes: readonly TrialOutcome[], cases: readonly EvalCase[]): TrialOutcome[] {
+  const byId = new Map(cases.map((c) => [c.id, c]));
+  return outcomes.map((o) => {
+    const c = byId.get(o.caseId);
+    return c === undefined ? o : { ...o, expected: c.expected, tags: [...c.tags] };
+  });
+}
