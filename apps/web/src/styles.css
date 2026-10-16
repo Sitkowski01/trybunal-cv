@@ -686,6 +686,20 @@ select:focus-visible {
     font-size: 0.78rem;
   }
 
+  /* Najwyzej 5 linii — dymek nie zaslania calej sali; pelny tekst jest w protokole pod nia. */
+  .scene__said {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
+    overflow: hidden;
+  }
+
+  /* Dymek na telefonie bywa tak duzy jak sala — ocena pod nim, a nie na srodku tekstu. */
+  .scene .scene__score {
+    z-index: auto;
+  }
+
   .stage__toggle {
     position: static;
     display: block;

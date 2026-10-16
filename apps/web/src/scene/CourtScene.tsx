@@ -124,7 +124,7 @@ export default function CourtScene({ direction, reducedMotion, lowPower }: Court
       ))}
       {said !== null && (
         <div ref={bubble} className={`scene__bubble scene__bubble--${said.who}`}>
-          {said.text}
+          <span className="scene__said">{said.text}</span>
           {said.revisedScore !== null && <strong className="scene__revised"> → {said.revisedScore}/10</strong>}
         </div>
       )}
