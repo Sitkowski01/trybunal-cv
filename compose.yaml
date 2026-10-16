@@ -1,0 +1,57 @@
+# Cala aplikacja lokalnie: docker compose up --build  ->  http://localhost:8080
+# Bez klucza rozprawy ida w probie generalnej (bez modelu). Z modelem:
+#   ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build
+services:
+  db:
+    image: postgres:17-alpine
+    # Haslo tylko dla sieci compose — port bazy nie jest wystawiony na zewnatrz.
+    environment:
+      POSTGRES_USER: trybunal
+      POSTGRES_PASSWORD: trybunal
+      POSTGRES_DB: trybunal
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "trybunal"]
+      interval: 2s
+      retries: 30
+
+  # Klucz glowny szyfrowania dziennika: losowany przy pierwszym starcie i trzymany w wolumenie,
+  # a nie wpisany w repozytorium. Usuniecie wolumenu = utrata dostepu do wszystkich rozpraw.
+  keygen:
+    image: alpine:3.22
+    command: ["sh", "-c", "umask 077; test -s /keys/master || head -c 32 /dev/urandom | base64 > /keys/master; chown 1000 /keys/master"]
+    volumes:
+      - keys:/keys
+
+  api:
+    build: { context: ., target: api }
+    depends_on:
+      db: { condition: service_healthy }
+      keygen: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://trybunal:trybunal@db:5432/trybunal
+      TRYBUNAL_MASTER_KEY_FILE: /keys/master
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TRYBUNAL_REHEARSAL: ${TRYBUNAL_REHEARSAL:-1}
+      # W probie generalnej przerwa przed odpowiedzia — widac kolejne fazy na scenie.
+      TRYBUNAL_REHEARSAL_DELAY_MS: ${TRYBUNAL_REHEARSAL_DELAY_MS:-1500}
+      # Za nginx: limit wniesien liczony per adres klienta, nie per proxy.
+      TRUST_PROXY: "1"
+    volumes:
+      - keys:/keys:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 2s
+      retries: 30
+
+  web:
+    build: { context: ., target: web }
+    depends_on:
+      api: { condition: service_healthy }
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  db:
+  keys:
