@@ -20,7 +20,7 @@ const collectErrors = (page: Page) => {
   return errors;
 };
 
-// Wolna proba generalna (1,5 s na odpowiedz, jak prawdziwy model): kamera zdazy dojechac do mowcy.
+// Wolna proba generalna (3 s na odpowiedz, jak prawdziwy model): kamera zdazy dojechac do mowcy.
 test.use({ baseURL: `http://127.0.0.1:${String(SCENE.web)}` });
 // Szeregowo: dwie sceny naraz na WebGL bez karty graficznej odbieraja sobie procesor.
 test.describe.configure({ timeout: 120_000, mode: "serial" });

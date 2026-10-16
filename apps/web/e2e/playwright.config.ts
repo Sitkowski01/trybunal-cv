@@ -3,7 +3,8 @@ import { DEMO, SCENE, WEB } from "./servers.js";
 
 // E2E na prawdziwym API w trybie proby generalnej (bez modelu i klucza) i na zbudowanym frontendzie.
 // Dwie pary serwerow: szybka (300 ms przed kazda odpowiedzia — widac fazy i jest czas na anulowanie)
-// i wolna dla sali 3D (1,5 s — jak prawdziwy model, kamera zdazy dojechac do kazdego mowcy).
+// i wolna dla sali 3D (3 s — jak prawdziwy model; kamera zdazy dojechac do mowcy, a klatka liczona przez procesor
+// skonczy sie przed nastepna wypowiedzia).
 const servers = ({ api, web, delayMs }: { api: number; web: number; delayMs: number }) => [
   {
     command: "node ../../api/dist/main.js",
