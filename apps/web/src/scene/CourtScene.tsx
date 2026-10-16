@@ -27,18 +27,40 @@ const VERDICT = { invite: "ZAPROSIĆ", reject: "ODRZUCIĆ" } as const;
 
 export default function CourtScene({ direction, reducedMotion, lowPower }: CourtSceneProps) {
   const bubble = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const { bubble: said, verdict } = direction;
+  // Rozmiary dymka i sali z ResizeObserver, a nie offsetWidth w kazdej klatce: odczyt zaraz po
+  // zmianie transform wymuszalby przeliczenie ukladu strony co klatke (na WebGL bez karty to boli).
+  const sizes = useRef({ bubble: { width: 0, height: 0 }, stage: { width: 0, height: 0 } });
+  const hasBubble = said !== null;
+  useLayoutEffect(() => {
+    const room = stage.current;
+    const element = bubble.current;
+    if (room === null) return;
+    const observer = new ResizeObserver(() => {
+      sizes.current = {
+        stage: { width: room.clientWidth, height: room.clientHeight },
+        bubble: { width: element?.offsetWidth ?? 0, height: element?.offsetHeight ?? 0 },
+      };
+    });
+    observer.observe(room);
+    if (element !== null) observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasBubble]);
   // Dymek to zwykly element DOM nad plotnem; co klatke przesuwamy go nad glowe mowcy.
   const placeBubble = useCallback((x: number, y: number, visible: boolean) => {
     const element = bubble.current;
-    const stage = element?.parentElement;
-    if (element == null || stage == null) return;
-    const at = keepInside({ x, y }, { width: element.offsetWidth, height: element.offsetHeight }, { width: stage.clientWidth, height: stage.clientHeight });
+    if (element === null) return;
+    const measured = sizes.current;
+    // Przed pierwszym pomiarem (rozmiar 0) dymek stoi nad glowa, bez dociskania.
+    const at = measured.stage.width === 0 ? { x, y } : keepInside({ x, y }, measured.bubble, measured.stage);
     element.style.transform = `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px) translate(-50%, -100%)`;
     element.style.visibility = visible ? "visible" : "hidden";
   }, []);
   return (
-    <div className="scene" data-shot={direction.shot} data-speaker={said?.who ?? ""} data-verdict={verdict ?? ""} aria-hidden="true">
+    <div ref={stage} className="scene" data-shot={direction.shot} data-speaker={said?.who ?? ""} data-verdict={verdict ?? ""} aria-hidden="true">
       <Canvas
         shadows={lowPower ? false : "percentage"}
         flat
