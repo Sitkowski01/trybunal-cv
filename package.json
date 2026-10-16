@@ -11,11 +11,12 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "eslint .",
-    "arch": "depcruise packages apps --config .dependency-cruiser.cjs",
+    "arch": "depcruise packages apps evals --config .dependency-cruiser.cjs",
     "mutation": "pnpm build && pnpm -r --workspace-concurrency=1 mutation",
     "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test",
     "trial": "node packages/court/dist/bin.js",
     "api": "node apps/api/dist/main.js",
+    "evals": "node evals/dist/bin.js",
     "web": "pnpm --filter @trybunal/web dev",
     "e2e": "pnpm build && pnpm --filter @trybunal/web e2e"
   },

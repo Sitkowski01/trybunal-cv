@@ -61,3 +61,4 @@ jobs:
           path: |
             packages/*/reports/mutation
             apps/*/reports/mutation
+            evals/reports/mutation

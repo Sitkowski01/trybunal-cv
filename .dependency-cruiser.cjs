@@ -49,6 +49,20 @@ module.exports = {
       to: { path: "^apps/" },
     },
     {
+      name: "nikt-nie-zna-ewaluacji",
+      comment: "ewaluacje to narzedzie obok sadu: uzywaja court/domain/llm, ale produkcja nie importuje evals/",
+      severity: "error",
+      from: { path: "^(packages|apps)/" },
+      to: { path: "^evals/" },
+    },
+    {
+      name: "ewaluacje-bez-aplikacji",
+      comment: "ewaluacje prowadza rozprawy przez court, a nie przez API czy frontend",
+      severity: "error",
+      from: { path: "^evals/" },
+      to: { path: "^apps/" },
+    },
+    {
       name: "bez-cykli",
       severity: "error",
       from: {},
