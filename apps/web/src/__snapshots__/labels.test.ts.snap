@@ -6,6 +6,7 @@ exports[`etykiety > teksty interfejsu (zmiana tekstu widoczna w review jak zmian
     "assessed": "ocenił",
     "idle": "czeka",
     "listening": "słucha",
+    "preparing": "szykuje odpowiedź…",
     "speaking": "przemawia",
     "thinking": "czyta akta…",
   },

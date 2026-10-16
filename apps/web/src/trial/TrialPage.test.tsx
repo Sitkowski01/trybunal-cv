@@ -17,12 +17,14 @@ describe("TrialPage na zywo", () => {
     expect(screen.getByText("Oceny")).toHaveAttribute("aria-current", "step");
 
     send(...full.slice(3, 7));
-    expect(status()).toHaveTextContent("Debata, runda 1 z 1 — mówi Bot ATS.");
+    // Po mowie oskarzenia przemawia prokurator, a Bot ATS szykuje pierwsza odpowiedz.
+    expect(status()).toHaveTextContent("Prokurator wygłasza mowę oskarżenia.");
     expect(screen.getByText("Debata 1/1")).toHaveAttribute("aria-current", "step");
     expect(screen.getByText("Oceny")).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("heading", { name: "Protokół" })).toBeInTheDocument();
     expect(within(bench).getByText("przemawia")).toBeInTheDocument();
-    expect(within(bench).getAllByText("słucha")).toHaveLength(4);
+    expect(within(bench).getByText("szykuje odpowiedź…")).toBeInTheDocument();
+    expect(within(bench).getAllByText("słucha")).toHaveLength(3);
   });
 
   it("pelna rozprawa: zmiana zdania, werdykt, raport z diffem, koszt", () => {

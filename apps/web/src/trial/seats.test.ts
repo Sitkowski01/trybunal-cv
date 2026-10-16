@@ -3,10 +3,10 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { envelopes, fold, trial } from "../test/trials.js";
 import { emptyCourt } from "./court.js";
-import { seats, speaker } from "./seats.js";
+import { nextUp, seats, speaker } from "./seats.js";
 
 describe("seats i speaker zgodne z domena", () => {
-  it("kazdy poczatek rozprawy: mowca jak nextSpeaker, oceny na miejscach jak currentScores", () => {
+  it("kazdy poczatek rozprawy: nastepny jak nextSpeaker, mowca z ostatniej wypowiedzi, oceny jak currentScores", () => {
     const score = fc.integer({ min: 1, max: 10 });
     const arb = fc.record({
       scores: fc.array(score, { minLength: 5, maxLength: 5 }),
@@ -18,7 +18,8 @@ describe("seats i speaker zgodne z domena", () => {
         const prefix = events.slice(0, (cut % events.length) + 1);
         const domain = replay(prefix);
         const court = fold(envelopes(prefix));
-        expect(speaker(court)).toBe(nextSpeaker(domain));
+        expect(nextUp(court)).toBe(nextSpeaker(domain));
+        expect(speaker(court)).toBe(domain.phase === "debate" ? (domain.statements.at(-1)?.criticId ?? "prosecutor") : null);
         if (domain.assessments.length === CRITIC_IDS.length) {
           expect(Object.fromEntries(seats(court).map((s) => [s.criticId, s.score]))).toEqual(currentScores(domain));
         }
@@ -28,6 +29,7 @@ describe("seats i speaker zgodne z domena", () => {
 
   it("przed wniesieniem nikt nie mowi", () => {
     expect(speaker(emptyCourt)).toBeNull();
+    expect(nextUp(emptyCourt)).toBeNull();
   });
 });
 

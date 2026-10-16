@@ -1,6 +1,6 @@
 import { CRITIC_LABELS } from "../labels.js";
 import type { Court } from "./court.js";
-import { seats, speaker } from "./seats.js";
+import { seats } from "./seats.js";
 
 /** Jedno zdanie o tym, co dzieje sie na sali — ogloszone tez czytnikowi ekranu. */
 export function narrate(court: Court): string {
@@ -14,9 +14,10 @@ export function narrate(court: Court): string {
     case "prosecution":
       return "Prokurator przygotowuje mowę oskarżenia.";
     case "debate": {
-      const now = speaker(court);
-      const who = now === null ? "" : ` — mówi ${CRITIC_LABELS[now].name}`;
-      return `Debata, runda ${String(trial.round)} z ${String(trial.debateRounds)}${who}.`;
+      // Ten, czyja wypowiedz jest w dymku i na koncu protokolu; przed pierwsza — mowa oskarzenia.
+      const last = trial.statements.at(-1);
+      if (last === undefined) return "Prokurator wygłasza mowę oskarżenia.";
+      return `Debata, runda ${String(last.round)} z ${String(trial.debateRounds)} — mówi ${CRITIC_LABELS[last.criticId].name}.`;
     }
     case "deliberation":
       return "Sędzia się naradza.";

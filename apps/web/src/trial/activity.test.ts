@@ -21,10 +21,16 @@ describe("activity", () => {
     expect(activities(lost)).toEqual(["assessed", "idle", "idle", "idle", "idle"]);
   });
 
-  it("debata: mowi kolejny przy stole, reszta slucha", () => {
+  it("debata: przemawia autor ostatniej wypowiedzi, nastepny szykuje odpowiedz, reszta slucha", () => {
     const court = fold(list.slice(0, 8));
-    expect(speaker(court)).toBe("hr");
-    expect(activities(court)).toEqual(["listening", "speaking", "listening", "listening", "listening"]);
+    expect(speaker(court)).toBe("ats");
+    expect(activities(court)).toEqual(["speaking", "preparing", "listening", "listening", "listening"]);
+  });
+
+  it("po mowie oskarzenia przemawia prokurator, Bot ATS szykuje pierwsza odpowiedz", () => {
+    const court = fold(list.slice(0, 7));
+    expect(speaker(court)).toBe("prosecutor");
+    expect(activities(court)).toEqual(["preparing", "listening", "listening", "listening", "speaking"]);
   });
 
   it("oskarzenie, narada i koniec: wszyscy po ocenie", () => {

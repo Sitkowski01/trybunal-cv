@@ -21,5 +21,15 @@ export function seats(court: Court): readonly Seat[] {
   });
 }
 
-/** Kto mowi w debacie (regula z domeny). */
-export const speaker = (court: Court): CriticId | null => (court.trial === null ? null : nextSpeaker(court.trial));
+/**
+ * Kto przemawia w debacie: autor wypowiedzi, ktora widac (w dymku i w protokole) — ostatniej,
+ * a przed pierwsza prokurator z mowa oskarzenia. Ten sam mowca w narracji, na karcie i w scenie.
+ */
+export function speaker(court: Court): CriticId | null {
+  const trial = court.trial;
+  if (trial?.phase !== "debate") return null;
+  return trial.statements.at(-1)?.criticId ?? "prosecutor";
+}
+
+/** Kto szykuje nastepna wypowiedz (regula z domeny); null, gdy debata sie skonczyla. */
+export const nextUp = (court: Court): CriticId | null => (court.trial === null ? null : nextSpeaker(court.trial));

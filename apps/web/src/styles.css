@@ -347,7 +347,8 @@ select:focus-visible {
   border-top: 3px solid var(--reject);
 }
 
-.critic--thinking {
+.critic--thinking,
+.critic--preparing {
   animation: pulse 1.6s ease-in-out infinite;
 }
 
@@ -734,7 +735,8 @@ select:focus-visible {
     transition: none;
   }
 
-  .critic--thinking {
+  .critic--thinking,
+  .critic--preparing {
     animation: none;
     border-style: dashed;
   }

@@ -25,6 +25,7 @@ export const ACTIVITY_LABELS: Readonly<Record<Activity, string>> = {
   thinking: "czyta akta…",
   assessed: "ocenił",
   speaking: "przemawia",
+  preparing: "szykuje odpowiedź…",
   listening: "słucha",
   idle: "czeka",
 };
