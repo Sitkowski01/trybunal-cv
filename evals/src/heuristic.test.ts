@@ -21,6 +21,15 @@ describe("offerKeywords", () => {
     expect(offerKeywords("Java, Spring, SQL")).toEqual([]);
   });
 
+  it("punkt listy tylko na poczatku linii; myslnik w srodku zdania to nie lista", () => {
+    expect(offerKeywords("Wymagania - Java\nx- Kotlin\n  * Scala")).toEqual(["scala"]);
+  });
+
+  it("kilka kropek na koncu slowa tez odpada", () => {
+    expect(offerKeywords("- Spring..")).toEqual(["spring"]);
+    expect(keywordCoverage("Znam Spring..", ["spring"])).toBe(1);
+  });
+
   it("pomija jednoznakowe slowa i punkty bez slow", () => {
     expect(offerKeywords("- R oraz Go\n- ...")).toEqual(["go"]);
   });
@@ -54,7 +63,7 @@ describe("heuristicScore", () => {
 describe("heuristicScript", () => {
   it("bez dokumentow CV i oferty ocenia na zero pokrycia", () => {
     const request = { label: "assessment:ats", model: "claude-haiku-5-5", maxTokens: 1, rules: "", documents: [], instructions: "", task: "", schema: z.unknown() } as const;
-    expect(heuristicScript(request, 0)).toMatchObject({ score: 1, summary: "Heurystyka: 0% słów kluczowych z oferty." });
+    expect(heuristicScript(request, 0)).toEqual({ score: 1, summary: "Heurystyka: 0% słów kluczowych z oferty.", strengths: [], concerns: [], rewrites: [] });
   });
 });
 

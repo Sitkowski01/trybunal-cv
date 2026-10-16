@@ -111,6 +111,17 @@ describe("runEvals", () => {
     expect(started).toBe(2);
   });
 
+  it("zatrzymanie w trakcie rozprawy, ktora i tak sie konczy: wynik zapisany, kolejne nie ruszaja", async () => {
+    let halted = false;
+    const llmFor = () =>
+      new FakeLlmClient((req, i) => {
+        if (req.label === "prosecution") halted = true;
+        return heuristicScript(req, i);
+      });
+    const outcomes = await runEvals(plan, { llmFor, concurrency: 1, halted: () => halted, onOutcome: () => undefined });
+    expect(outcomes).toMatchObject([{ caseId: "a", variant: "v1", decision: "invite" }]);
+  });
+
   it("nieoczekiwany blad (zapis wyniku) zatrzymuje wszystkich pracownikow i wychodzi na zewnatrz", async () => {
     let started = 0;
     const llmFor = () => {

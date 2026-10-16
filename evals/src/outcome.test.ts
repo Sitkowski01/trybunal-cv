@@ -82,12 +82,26 @@ describe("outcomeKey i parseOutcomes", () => {
     expect(() => parseOutcomes(`${line}\n\n${JSON.stringify({ ...outcome(), decision: "maybe" })}\n`)).toThrow(/^Wiersz 3: /);
     expect(() => parseOutcomes(`${JSON.stringify({ ...outcome(), extra: 1 })}\n`)).toThrow("Wiersz 1");
     expect(() => parseOutcomes(`${line}\n{zly json\n`)).toThrow(/^Wiersz 2: .*JSON/);
+    expect(parseOutcomes(`${line}\n   \n`)).toEqual([outcome()]);
+    // Dwa bledy w jednym wierszu — oba w komunikacie.
+    expect(() => parseOutcomes(`${JSON.stringify({ ...outcome(), decision: "maybe", repeat: -1 })}\n`)).toThrow(/^Wiersz 1: Too small: .+; Invalid option: .+/);
+  });
+
+  it("blad skladni JSON niesie oryginalny wyjatek jako przyczyne", () => {
+    let caught: unknown;
+    try {
+      parseOutcomes("{\n");
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as Error).cause).toBeInstanceOf(SyntaxError);
   });
 
   it("urwany ostatni wiersz (zabity proces) pomijany — wznowienie powtorzy te rozprawe", () => {
     const line = JSON.stringify(outcome());
     expect(parseOutcomes(`${line}\n${line.slice(0, 20)}`)).toEqual([outcome()]);
     expect(parseOutcomes(line)).toEqual([]);
+    expect(parseOutcomes(`\n${line}`)).toEqual([]);
   });
 });
 

@@ -13,7 +13,12 @@ describe("schemat przypadku", () => {
 
   it.each([
     ["id z wielka litera", { id: "A" }],
+    ["id z wielka litera na poczatku", { id: "Ab" }],
+    ["id z wielka litera na koncu", { id: "aB" }],
+    ["id dluzsze niz 40 znakow", { id: "a".repeat(41) }],
     ["sciezka wychodzaca poza zbior", { cv: "../sekret.md" }],
+    ["sciezka z przedrostkiem", { cv: "../cvs/a.md" }],
+    ["sciezka z przyrostkiem", { cv: "cvs/a.md.txt" }],
     ["sciezka bez katalogu", { offer: "o.md" }],
     ["nieznany werdykt", { expected: "maybe" }],
     ["nieznany tag", { tags: ["swietne"] }],
@@ -23,6 +28,11 @@ describe("schemat przypadku", () => {
     ["dodatkowe pole", { score: 7 }],
   ])("odrzuca: %s", (_, change) => {
     expect(EvalCaseSchema.safeParse({ ...entry, ...change }).success).toBe(false);
+  });
+
+  it("komunikaty mowia, co poprawic", () => {
+    const issues = EvalCaseSchema.safeParse({ ...entry, id: "Zle Id", offer: "oferta.md" }).error?.issues.map((i) => i.message);
+    expect(issues).toEqual(["Id z malych liter, cyfr i myslnikow", "Sciezka w postaci katalog/plik.md"]);
   });
 
   it("manifest: niepusty i bez powtorzonych id", () => {

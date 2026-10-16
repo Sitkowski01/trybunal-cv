@@ -37,6 +37,12 @@ describe("renderReport", () => {
     expect(text).toContain("| mocne | — | 1/1 |");
   });
 
+  it("bez zadnych wynikow: sam naglowek i informacja", () => {
+    const text = renderReport(meta, []);
+    expect(text.endsWith("Brak wyników — żadna rozprawa nie została zapisana.\n")).toBe(true);
+    expect(text).not.toContain("## Metryki");
+  });
+
   it("warianty bez roznic werdyktow — mowi to wprost", () => {
     const text = renderReport(meta, [outcome(), outcome({ variant: "v2" })]);
     expect(text).toContain("## v1 → v2: przypadki ze zmienionym werdyktem\n\nBrak — oba warianty ogłaszają te same werdykty większości.");
