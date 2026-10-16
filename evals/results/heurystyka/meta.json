@@ -1,0 +1,8 @@
+{
+  "llm": "heuristic",
+  "repeats": 1,
+  "debateRounds": 1,
+  "startedAt": "2026-10-16T11:20:47.184Z",
+  "dataset": "evals/dataset",
+  "spentNanoUsd": 0
+}

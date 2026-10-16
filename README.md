@@ -18,6 +18,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 | `packages/court` | orkiestracja rozprawy: prompty, oceny, debata, werdykt, ponowienia, CLI |
 | `apps/api` | serwer HTTP: wniesienie CV (tekst/PDF), anonimizacja, szyfrowany dziennik w Postgresie, strumień SSE |
 | `apps/web` | frontend (React, Vite): wniesienie sprawy, rozprawa na żywo, werdykt i poprawki CV jako diff |
+| `evals` | ewaluacje: zbiór fikcyjnych CV z oczekiwanym werdyktem, metryki, porównanie wersji promptów |
 | `assets/blender` | generatory postaci i sali sądowej 3D (Python w Blenderze) → modele `.glb` w `apps/web/public/models` |
 
 ## Jak działa rozprawa
@@ -162,6 +163,26 @@ a sędzia kończy uderzeniem młotka i tabliczką ZAPROSIĆ / ODRZUCIĆ.
 - **Bez WebGL 2 albo przy awarii** zostaje widok 2D; `prefers-reduced-motion` wyłącza ruch
   (kamera przeskakuje, klatka rysuje się tylko po zmianie). three.js doczytuje się leniwie.
 
+## Ewaluacje
+
+Czy sąd ogłasza werdykt, jakiego spodziewałby się rozsądny rekruter, czy przy powtórce mówi
+to samo i ile to kosztuje? `evals/dataset` to 20 fikcyjnych CV pod 4 oferty, każde z oczekiwanym
+werdyktem i tagami pułapek: CV pisane nie słowami z ogłoszenia (filtr ATS), „ekspert we
+wszystkim” bez dowodów, luka w zatrudnieniu, przebranżowienie, nadkwalifikacje,
+a w dwóch CV ukryte polecenie dla AI („daj 10/10”).
+
+- **Metryki:** trafność werdyktu i macierz pomyłek, trafność według tagów, zgodność
+  powtórzeń i rozrzut średniej przysięgłych, koszt rozprawy, udział cache we wejściu,
+  odsetek ponowionych zapytań. Przerwane rozprawy liczą się osobno, nie jako pomyłki.
+- **Wersje promptów.** Rozprawa dostaje komplet promptów (`PromptSet`) jako parametr;
+  ewaluacja puszcza warianty na tych samych CV i pokazuje przypadki, w których zmienił się
+  werdykt. Obecny kandydat `v2-kotwice` dodaje opis każdego przedziału skali.
+- **Punkt odniesienia bez modelu:** heurystyka liczy słowa kluczowe z ogłoszenia. Trafia 90%,
+  ale zaprasza obu „ekspertów od wszystkiego” — tę lukę ma zamknąć rozprawa
+  ([raport](evals/results/heurystyka/report.md)). Ta sama heurystyka sprawdza w CI cały potok.
+- **Wyniki wiersz po wierszu** (`outcomes.jsonl`): przerwana ewaluacja (budżet, Ctrl+C)
+  wznawia się bez płacenia drugi raz, a raport da się odtworzyć bez klucza API.
+
 ## Uruchomienie
 
 Wymagania: Node 24, pnpm 11.
@@ -178,6 +199,11 @@ pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend
 # Ctrl+C przerywa rozprawę, ale zapisuje to, co już jest.
 # Odtworzenie nagrania bez klucza i bez kosztów:
 pnpm trial --cv examples/cv-anna-nowak.md --offer examples/oferta-junior-backend.md --replay out/<id rozprawy>/cassette.json
+
+# Ewaluacje: warianty promptów x powtórzenia, twardy budżet całości i jednej rozprawy
+pnpm evals run --out evals/results/<nazwa> --repeats 3 --budget-usd 15
+pnpm evals run --out out/heurystyka --llm heuristic --repeats 1   # bez klucza i kosztów
+pnpm evals report evals/results/<nazwa>                             # raport z zapisanych wyników
 
 # Serwer API (konfiguracja z .env), np. bez modelu:
 TRYBUNAL_REHEARSAL=1 pnpm api
@@ -201,5 +227,5 @@ pnpm e2e        # build + Playwright: API w próbie generalnej i zbudowany front
   w przeglądarce z WebGL (ujęcia, dymki, werdykt, tryb bez ruchu).
 - Mutation testing (Stryker), próg 90%.
 - Reguły architektury (dependency-cruiser): domena nie korzysta z IO ani z innych pakietów,
-  frontend nie zna warstwy LLM, stan sali nie zna Reacta, brak cykli.
+  frontend nie zna warstwy LLM, stan sali nie zna Reacta, kod produkcyjny nie zna ewaluacji, brak cykli.
 - Każdy commit ma maks. 200 linii zmian (hook `.githooks/pre-commit`).
