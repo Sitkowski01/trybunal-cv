@@ -8,7 +8,7 @@ Rozprawę widać na żywo jako animowaną scenę 3D.
 **[Demo →](https://sitekmikolaj.pl/trybunal/)** — nagrana prawdziwa rozprawa na Claude, odtwarzana
 w przeglądarce bez serwera ([jak to działa](#demo-bez-serwera)).
 
-![Nagrana rozprawa na Claude: debata przysięgłych i werdykt ZAPROSIĆ](docs/demo.gif)
+![Nagrana rozprawa na Claude: oceny nad głowami, mowa oskarżenia, zmiana zdania w debacie i wyrok ODRZUCIĆ](docs/demo.gif)
 
 ```bash
 docker compose up --build    # http://localhost:8080 — Postgres, API i frontend; bez klucza próba generalna
@@ -233,7 +233,7 @@ a w dwóch CV ukryte polecenie dla AI („daj 10/10”).
   odsetek ponowionych zapytań. Przerwane rozprawy liczą się osobno, nie jako pomyłki.
 - **Wersje promptów.** Rozprawa dostaje komplet promptów (`PromptSet`) jako parametr;
   ewaluacja puszcza warianty na tych samych CV i pokazuje przypadki, w których zmienił się
-  werdykt. Obecny kandydat `v2-kotwice` dodaje opis każdego przedziału skali.
+  werdykt. Sąd używa wersji, która wygrała porównanie; poprzednie zostają do odtworzenia wyników.
 - **Punkt odniesienia bez modelu:** heurystyka liczy słowa kluczowe z ogłoszenia. Trafia 90%,
   ale zaprasza obu „ekspertów od wszystkiego” — tę lukę ma zamknąć rozprawa
   ([raport](evals/results/heurystyka/report.md)). Ta sama heurystyka sprawdza w CI cały potok.
@@ -257,6 +257,21 @@ a w dwóch CV ukryte polecenie dla AI („daj 10/10”).
   wnioski o stabilności; zbiór okazał się za łatwy dla modelu. Następny krok to trudniejsze
   przypadki graniczne i 3 powtórzenia.
 
+**v1 kontra v3-scena** ([raport](evals/results/claude-v1-v3/report.md)). Pierwsze nagranie demo było
+merytoryczne, ale jako pokaz nie działało: wypowiedzi po 900–1300 znaków, każda od „Jako X podtrzymuję”,
+a prokurator kończył mowę słowami „zapraszam”. v3-scena: debata to 2–3 zdania do konkretnego krytyka,
+prokurator zawsze wnosi o odrzucenie (ale ocenia uczciwie), sędzia zaczyna od jednozdaniowej sentencji.
+
+| | v1 | v3-scena |
+|---|---|---|
+| Trafność (bez przypadków granicznych) | 95% (100%) | 95% (100%) |
+| Koszt rozprawy (średni) | $0,29 | $0,24 |
+| Wejście z cache | 28% | 40% |
+
+Ta sama trafność (każdy wariant pomylił się raz, w innym przypadku granicznym), rozprawa o 17% tańsza —
+v3-scena zastąpiła v1. Raport rozbija też ponowienia według kroku i powodu: większość to Bot ATS na Haiku
+przerywany limitem tokenów — następny kandydat do poprawki.
+
 ## Demo bez serwera
 
 `pnpm --filter @trybunal/web build:demo` buduje frontend jako zwykłe pliki (`apps/web/dist-demo`), które
@@ -270,15 +285,17 @@ odtwarzają nagraną rozprawę — bez API, bazy i modelu, pod dowolną ścieżk
   bez zmian. Przerwanie rozprawy kończy ją zdarzeniem `TrialAborted`, jak na serwerze.
 - **Tempo czytania, nie modelu.** Prawdziwe odstępy to czas odpowiedzi API; w demo przerwa po zdarzeniu
   zależy od długości tekstu, żeby widz zdążył przeczytać dymek (`?tempo=4` przyspiesza).
-- **Nagranie w repozytorium to prawdziwa rozprawa na Claude** nad fikcyjnym CV: 13 wywołań modelu
-  (jedno ponowienie), $0,26, werdykt ZAPROSIĆ — prokurator wytknął „Ekspert React” przy roku nauki Javy.
+- **Nagranie w repozytorium to prawdziwa rozprawa na Claude** nad fikcyjnym CV ze zbioru ewaluacji:
+  księgowa z 8 latami rozliczeń płatności po bootcampie Javy aplikuje do zespołu płatności. Dwie rundy
+  debaty, trzy zmiany zdania, werdykt ODRZUCIĆ przy średniej 5,75 (próg 6); 20 wywołań modelu, $0,32.
+  Wybrana spośród trzech nagranych spraw granicznych jako najbardziej sporna.
 - **Strona startowa zamiast formularza**: formularz przyjąłby dowolne CV, a odtworzył zawsze to samo
   nagranie. Nagranie powstaje z fikcyjnego CV z `examples/` — odpowiedzi modelu cytują CV.
 
 ```bash
 pnpm build && pnpm api                      # z kluczem w .env (TRYBUNAL_REHEARSAL=0)
-curl -X POST localhost:3000/trials -F "cvText=<examples/cv-anna-nowak.md" \
-  -F "jobOffer=<examples/oferta-junior-backend.md" -F debateRounds=1 -F "candidateName=Anna Nowak"
+curl -X POST localhost:3000/trials -F "cvText=<examples/cv-monika-sadowska.md" \
+  -F "jobOffer=<examples/oferta-junior-java-fintech.md" -F debateRounds=2 -F "candidateName=Monika Sadowska"
 curl -N localhost:3000/trials/<id>/events > apps/web/src/demo/recording.sse   # po werdykcie
 pnpm --filter @trybunal/web build:demo      # -> apps/web/dist-demo
 ```
