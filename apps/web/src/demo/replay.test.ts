@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../api/client.js";
 import { CLOSED, type EventSourceLike } from "../api/stream.js";
+import { parseEnvelope } from "../trial/envelope.js";
 import { toSse } from "../test/sse.js";
 import { envelopes, trial } from "../test/trials.js";
 import { FIRST_EVENT_MS, pauseAfter } from "./pace.js";
 import { readRecording } from "./recording.js";
-import { createReplay, DEMO_TRIAL_ID } from "./replay.js";
+import { createReplay, DEMO_TRIAL_ID, speedFromSearch } from "./replay.js";
 
 const full = envelopes(trial([7, 6, 5, 7, 3], [[null, null, 6, null, null]]));
 const recording = readRecording(toSse(full));
@@ -73,5 +75,75 @@ describe("createReplay", () => {
     vi.advanceTimersByTime(END);
     expect(source.readyState).toBe(CLOSED);
     expect(got).toEqual([{ type: "error", data: "" }]);
+  });
+
+  it("przerwanie: zdarzenie TrialAborted z kolejnym numerem i end; dalszych zdarzen brak", async () => {
+    vi.setSystemTime(new Date("2026-10-16T12:00:00.000Z"));
+    const { api, sources } = createReplay(recording);
+    const got = listen(sources(api.eventsUrl(DEMO_TRIAL_ID)));
+    vi.advanceTimersByTime(at[3] ?? 0);
+    await api.cancel(DEMO_TRIAL_ID);
+    vi.advanceTimersByTime(END);
+    expect(got.map((g) => g.type)).toEqual(["open", "TrialFiled", "AssessmentSubmitted", "AssessmentSubmitted", "AssessmentSubmitted", "TrialAborted", "end"]);
+    expect(parseEnvelope(got[5]?.data ?? "")).toEqual({
+      seq: 5,
+      // Czas przerwania: zegar przesuniety do czwartego zdarzenia (0,3 + 2,5 + 2 × 1,2 s).
+      occurredAt: "2026-10-16T12:00:05.200Z",
+      event: { type: "TrialAborted", reason: "Rozprawa anulowana" },
+      calls: [],
+    });
+  });
+
+  it("przerwanie trafia do kazdego trwajacego odtworzenia (np. dwie karty)", async () => {
+    const { api, sources } = createReplay(recording);
+    const first = listen(sources(api.eventsUrl(DEMO_TRIAL_ID)));
+    const second = listen(sources(api.eventsUrl(DEMO_TRIAL_ID)));
+    vi.advanceTimersByTime(at[1] ?? 0);
+    await api.cancel(DEMO_TRIAL_ID);
+    vi.advanceTimersByTime(0);
+    expect(first.at(-2)?.type).toBe("TrialAborted");
+    expect(second.at(-2)?.type).toBe("TrialAborted");
+  });
+
+  it("nie da sie przerwac rozprawy zakonczonej, zamknietej ani nieznanej (409)", async () => {
+    const { api, sources } = createReplay(recording);
+    const conflict = new ApiError(409, "Rozprawa nie trwa");
+    await expect(api.cancel(DEMO_TRIAL_ID)).rejects.toEqual(conflict);
+
+    sources(api.eventsUrl(DEMO_TRIAL_ID));
+    vi.advanceTimersByTime(END);
+    await expect(api.cancel(DEMO_TRIAL_ID)).rejects.toEqual(conflict);
+
+    sources(api.eventsUrl(DEMO_TRIAL_ID)).close();
+    await expect(api.cancel(DEMO_TRIAL_ID)).rejects.toEqual(conflict);
+
+    sources(api.eventsUrl(DEMO_TRIAL_ID));
+    await expect(api.cancel("inna")).rejects.toEqual(conflict);
+  });
+
+  it("drugie przerwanie tej samej rozprawy: 409", async () => {
+    const { api, sources } = createReplay(recording);
+    sources(api.eventsUrl(DEMO_TRIAL_ID));
+    await api.cancel(DEMO_TRIAL_ID);
+    await expect(api.cancel(DEMO_TRIAL_ID)).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("wniesienie odrzuca (demo nie ma serwera), zapomnienie przechodzi; adres strumienia z id rozprawy", async () => {
+    const { api } = createReplay(recording);
+    await expect(api.file({ cv: { kind: "text", text: "x" }, jobOffer: "y", debateRounds: 0 })).rejects.toEqual(
+      new ApiError(0, "Demo nie ma serwera — odtwarza nagraną rozprawę."),
+    );
+    await expect(api.forget(DEMO_TRIAL_ID)).resolves.toBeUndefined();
+    expect(api.eventsUrl("a b")).toBe("nagranie:a b");
+  });
+});
+
+describe("speedFromSearch", () => {
+  it("tempo z adresu w zakresie 1-50, inaczej 1", () => {
+    expect(speedFromSearch("?tempo=4")).toBe(4);
+    expect(speedFromSearch("?rozprawa=nagranie&tempo=1.5")).toBe(1.5);
+    expect(speedFromSearch("?tempo=50")).toBe(50);
+    expect(speedFromSearch("?tempo=1")).toBe(1);
+    for (const bad of ["", "?tempo=0.5", "?tempo=51", "?tempo=abc", "?tempo=Infinity", "?tempo=-3"]) expect(speedFromSearch(bad)).toBe(1);
   });
 });
