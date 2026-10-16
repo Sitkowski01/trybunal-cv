@@ -59,10 +59,11 @@ describe("rezyser sceny", () => {
     expect(d.actions.ats).toBe("thinking"); // runda 2 zaczyna sie od ATS
   });
 
-  it("narada i wyrok: kamera na sedzim, mlotek i decyzja", () => {
+  it("narada: ostatnie slowo debaty zostaje w dymku, a sedzia sie naradza; potem wyrok", () => {
     const deliberation = after(ALL - 1);
-    expect(deliberation).toMatchObject({ shot: "judge", bubble: null, verdict: null });
-    expect(deliberation.actions.judge).toBe("deliberating");
+    // Ostatni w 2. rundzie mowi prokurator — jego slowo nie moze zniknac w chwili, gdy zaczyna sie narada.
+    expect(deliberation).toMatchObject({ shot: "prosecutor", bubble: { who: "prosecutor", text: "...", revisedScore: null }, verdict: null });
+    expect(deliberation.actions).toMatchObject({ judge: "deliberating", prosecutor: "speaking", ats: "listening" });
     const closed = after(ALL);
     // Sedzia oglasza sentencje (pierwszy akapit uzasadnienia).
     expect(closed).toMatchObject({ shot: "judge", verdict: "invite", bubble: { who: "judge", text: "Uzasadnienie", revisedScore: null } });

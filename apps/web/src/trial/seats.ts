@@ -23,11 +23,11 @@ export function seats(court: Court): readonly Seat[] {
 
 /**
  * Kto przemawia w debacie: autor wypowiedzi, ktora widac (w dymku i w protokole) — ostatniej,
- * a przed pierwsza prokurator z mowa oskarzenia. Ten sam mowca w narracji, na karcie i w scenie.
+ * a przed pierwsza prokurator z mowa oskarzenia. W naradzie: autor ostatniego slowa. Ten sam mowca w narracji, na karcie i w scenie.
  */
 export function speaker(court: Court): CriticId | null {
   const trial = court.trial;
-  if (trial?.phase !== "debate") return null;
+  if (trial?.phase !== "debate" && trial?.phase !== "deliberation") return null;
   return trial.statements.at(-1)?.criticId ?? "prosecutor";
 }
 

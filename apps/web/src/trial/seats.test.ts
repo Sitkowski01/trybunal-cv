@@ -19,7 +19,7 @@ describe("seats i speaker zgodne z domena", () => {
         const domain = replay(prefix);
         const court = fold(envelopes(prefix));
         expect(nextUp(court)).toBe(nextSpeaker(domain));
-        expect(speaker(court)).toBe(domain.phase === "debate" ? (domain.statements.at(-1)?.criticId ?? "prosecutor") : null);
+        expect(speaker(court)).toBe(domain.phase === "debate" || domain.phase === "deliberation" ? (domain.statements.at(-1)?.criticId ?? "prosecutor") : null);
         if (domain.assessments.length === CRITIC_IDS.length) {
           expect(Object.fromEntries(seats(court).map((s) => [s.criticId, s.score]))).toEqual(currentScores(domain));
         }

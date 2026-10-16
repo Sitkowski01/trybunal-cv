@@ -92,8 +92,10 @@ export function direct(court: Court): Direction {
     case "prosecution":
       actions.prosecutor = "thinking";
       return { shot: "prosecutor", actions, bubble: null, verdict: null, scores };
-    case "debate": {
+    case "debate":
+    case "deliberation": {
       // W dymku ostatnia wypowiedz (na poczatku debaty: mowa oskarzenia); nastepny mowca mysli.
+      // Narada zaczyna sie zaraz po ostatnim slowie debaty — bez tego ostatnia wypowiedz nie mialaby czasu na ekranie.
       const last = trial.statements.at(-1);
       const bubble: Bubble | null =
         last === undefined
@@ -102,7 +104,7 @@ export function direct(court: Court): Direction {
             : { who: "prosecutor", text: clip(trial.prosecution), revisedScore: null }
           : { who: last.criticId, text: clip(last.statement), revisedScore: last.revisedScore };
       for (const id of CRITIC_IDS) actions[id] = "listening";
-      actions.judge = "listening";
+      actions.judge = phase === "deliberation" ? "deliberating" : "listening";
       // Bez wypowiedzi w dymku jest mowa oskarzenia — prokurator wskazuje lawe. Nastepny mowca nigdy nie jest
       // tym z dymka: w rundzie mowi pieciu roznych krytykow, a nowa runda zaczyna sie od ATS, nie od prokuratora.
       if (bubble !== null) actions[bubble.who] = last === undefined ? "pointing" : "speaking";
@@ -110,9 +112,6 @@ export function direct(court: Court): Direction {
       if (next !== null) actions[next] = "thinking";
       return { shot: shotOf(bubble?.who ?? next ?? "prosecutor"), actions, bubble, verdict: null, scores };
     }
-    case "deliberation":
-      actions.judge = "deliberating";
-      return { shot: "judge", actions, bubble: null, verdict: null, scores };
     case "closed":
       actions.judge = "gavel";
       // Sedzia oglasza sentencje — pierwszy akapit uzasadnienia; cale jest w raporcie pod scena.

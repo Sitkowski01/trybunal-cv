@@ -19,8 +19,11 @@ export function narrate(court: Court): string {
       if (last === undefined) return "Prokurator wygłasza mowę oskarżenia.";
       return `Debata, runda ${String(last.round)} z ${String(trial.debateRounds)} — mówi ${CRITIC_LABELS[last.criticId].name}.`;
     }
-    case "deliberation":
-      return "Sędzia się naradza.";
+    case "deliberation": {
+      // Ostatnia wypowiedz jest jeszcze w dymku, gdy sedzia juz sie naradza.
+      const last = trial.statements.at(-1);
+      return last === undefined ? "Sędzia się naradza." : `Ostatnie słowo: ${CRITIC_LABELS[last.criticId].name}. Sędzia się naradza.`;
+    }
     case "closed":
       return "Werdykt ogłoszony.";
     case "aborted":

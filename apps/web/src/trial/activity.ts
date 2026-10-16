@@ -10,6 +10,7 @@ export function activity(court: Court, seat: Seat): Activity {
     case "assessing":
       return seat.assessment === null ? "thinking" : "assessed";
     case "debate":
+    case "deliberation":
       return speaker(court) === seat.criticId ? "speaking" : nextUp(court) === seat.criticId ? "preparing" : "listening";
     default:
       return "assessed";

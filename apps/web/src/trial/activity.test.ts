@@ -33,8 +33,12 @@ describe("activity", () => {
     expect(activities(court)).toEqual(["preparing", "listening", "listening", "listening", "speaking"]);
   });
 
-  it("oskarzenie, narada i koniec: wszyscy po ocenie", () => {
-    for (const n of [6, list.length - 1, list.length]) {
+  it("narada: autor ostatniego slowa wciaz przemawia, reszta slucha", () => {
+    expect(activities(fold(list.slice(0, list.length - 1)))).toEqual(["listening", "listening", "listening", "listening", "speaking"]);
+  });
+
+  it("oskarzenie i koniec: wszyscy po ocenie", () => {
+    for (const n of [6, list.length]) {
       expect(activities(fold(list.slice(0, n)))).toEqual(["assessed", "assessed", "assessed", "assessed", "assessed"]);
     }
   });
