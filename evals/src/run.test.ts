@@ -1,4 +1,7 @@
 import { DEFAULT_CONFIG, PROMPTS, type PromptSet } from "@trybunal/court";
+
+// Wariant "v1" w testach to po prostu prompty sadu pod stara nazwa — liczy sie kolejnosc i klucze, nie tresc.
+const v1: PromptSet = { ...PROMPTS, version: "v1" };
 import { FakeLlmClient, type LlmClient, raw } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { heuristicLlm, heuristicScript } from "./heuristic.js";
@@ -9,7 +12,7 @@ import { evalCase } from "./test/fixtures.js";
 const v2: PromptSet = { ...PROMPTS, version: "v2", rules: "inne zasady" };
 const plan: EvalPlan = {
   cases: [evalCase({ id: "a" }), evalCase({ id: "b", cvText: "Lubię gotować.", expected: "reject" })],
-  variants: [PROMPTS, v2],
+  variants: [v1, v2],
   repeats: 2,
   debateRounds: 0,
 };
@@ -76,7 +79,7 @@ describe("runEvals", () => {
         return heuristicLlm().generate(request, signal);
       },
     };
-    const single = { ...plan, variants: [PROMPTS] };
+    const single = { ...plan, variants: [v1] };
     await runEvals({ ...single, repeats: 3 }, { llmFor: () => slow, concurrency: 2, onOutcome: () => undefined });
     // Kazda rozprawa pyta do czterech krytykow naraz; dwie rozprawy -> wiecej niz cztery zapytania.
     expect(peak).toBeGreaterThan(4);
@@ -87,7 +90,7 @@ describe("runEvals", () => {
 
   it("przerwana rozprawa z powodu promptow (zla odpowiedz) jest zapisana jako wynik", async () => {
     const broken = new FakeLlmClient((req, i) => (req.label === "prosecution" ? raw("zle") : heuristicScript(req, i)));
-    const outcomes = await runEvals({ ...plan, repeats: 1, variants: [PROMPTS], cases: [evalCase()] }, { llmFor: () => broken, concurrency: 1, onOutcome: () => undefined });
+    const outcomes = await runEvals({ ...plan, repeats: 1, variants: [v1], cases: [evalCase()] }, { llmFor: () => broken, concurrency: 1, onOutcome: () => undefined });
     expect(outcomes).toMatchObject([{ decision: null }]);
   });
 

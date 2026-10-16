@@ -17,7 +17,7 @@ Dotychczasowa debata:
 [runda 1] HR screener: Ale testy są
 </przebieg>
 
-Runda 1. Twoja kolej (Tech Lead), twoja aktualna ocena: 5/10. Odnieś się do argumentów innych. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null.",
+Runda 1. Twoja kolej (Tech Lead), twoja aktualna ocena: 5/10. Odpowiedz na sali 2–3 zdaniami, najwyżej 350 znaków. Zwróć się do jednego konkretnego krytyka po nazwie i odnieś się do jego argumentu. Nie przedstawiaj się i nie zaczynaj od „podtrzymuję”. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null.",
   "debateFirstSpeaker": "<przebieg>
 Oceny niezależne:
 Bot ATS: 7/10 — podsumowanie ats
@@ -30,7 +30,7 @@ Mowa oskarżenia:
 Odrzucić za React
 </przebieg>
 
-Runda 1. Twoja kolej (Bot ATS), twoja aktualna ocena: 7/10. Odnieś się do argumentów innych. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null.",
+Runda 1. Twoja kolej (Bot ATS), twoja aktualna ocena: 7/10. Odpowiedz na sali 2–3 zdaniami, najwyżej 350 znaków. Zwróć się do jednego konkretnego krytyka po nazwie i odnieś się do jego argumentu. Nie przedstawiaj się i nie zaczynaj od „podtrzymuję”. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null.",
   "judge": "<przebieg>
 Oceny niezależne:
 Bot ATS: 7/10 — podsumowanie ats
@@ -52,7 +52,7 @@ Debata:
 Reguła werdyktu: zaproszenie, gdy średnia ocen czterech przysięgłych (prokurator nie głosuje) wynosi co najmniej 6, a Bot ATS dał co najmniej 4.
 Werdykt (ustalony regułą, nie zmieniaj go): ODRZUCIĆ. Średnia przysięgłych: 4.25. Rozrzut ocen: 4 (CV niejednoznaczne). CV nie przeszło filtra ATS. Zmiany zdania w debacie: Bot ATS: 7 → 2. 
 
-Napisz uzasadnienie werdyktu dla kandydata.",
+Zacznij od sentencji: jedno zdanie do 160 znaków, które sędzia ogłasza na sali. Po pustej linii napisz uzasadnienie werdyktu dla kandydata.",
   "judgeCalm": "<przebieg>
 Oceny niezależne:
 Bot ATS: 7/10 — podsumowanie ats
@@ -67,7 +67,7 @@ x
 Reguła werdyktu: zaproszenie, gdy średnia ocen czterech przysięgłych (prokurator nie głosuje) wynosi co najmniej 6, a Bot ATS dał co najmniej 4.
 Werdykt (ustalony regułą, nie zmieniaj go): ZAPROSIĆ NA ROZMOWĘ. Średnia przysięgłych: 7. Rozrzut ocen: 0. 
 
-Napisz uzasadnienie werdyktu dla kandydata.",
+Zacznij od sentencji: jedno zdanie do 160 znaków, które sędzia ogłasza na sali. Po pustej linii napisz uzasadnienie werdyktu dla kandydata.",
   "prosecution": "Niezależne oceny krytyków:
 <przebieg>
 Bot ATS: 7/10 — podsumowanie ats
@@ -78,7 +78,7 @@ Hiring Manager: 4/10 — podsumowanie hiringManager
 Prokurator: 3/10 — podsumowanie prosecutor
 </przebieg>
 
-Wygłoś mowę oskarżenia: najmocniejsze argumenty za odrzuceniem kandydata, oparte na cytatach z CV.",
+Wygłoś mowę oskarżenia na sali: 3–5 zdań, najwyżej 600 znaków. Dwa, trzy najmocniejsze argumenty za odrzuceniem, każdy oparty na krótkim cytacie z CV. Zakończ wnioskiem o odrzucenie.",
 }
 `;
 
@@ -125,7 +125,7 @@ Twoja rubryka:
 - wplyw na zespol albo produkt, nie lista obowiazkow
 - czy kandydat rozwiaze problem opisany w ogloszeniu",
     "Twoja rola: Prokurator. Patrzysz na: najmocniejszy powod, zeby kandydata odrzucic.
-Jesteś prokuratorem: szukasz najmocniejszego powodu, żeby kandydata odrzucić. Bądź surowy, ale uczciwy.
+Jesteś prokuratorem: szukasz najmocniejszego powodu, żeby kandydata odrzucić. W mowie i w debacie zawsze wnosisz o odrzucenie — to twoja rola. Ocenę 1–10 wystawiasz jednak uczciwie, tak jak przysięgli.
 Twoja rubryka:
 - najslabszy punkt CV, ktory moze przewazyc
 - rozjazd miedzy deklaracjami a dowodami

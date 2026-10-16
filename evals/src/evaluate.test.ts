@@ -40,10 +40,11 @@ describe("evaluate — przebieg", () => {
     expect(files.get("wyniki/r1/report.md")).toContain("heurystyka słów kluczowych (bez modelu)");
   });
 
-  it("--cases zaweza zbior; domyslnie 3 powtorzenia i oba warianty", async () => {
+  it("--cases zaweza zbior; domyslnie 3 powtorzenia promptow sadu", async () => {
     const { io, files } = memoryIo();
     expect(await evaluate([...RUN, "--cases", "b"], io)).toBe(0);
-    expect(saved(files)).toHaveLength(6);
+    expect(saved(files)).toHaveLength(3);
+    expect(new Set(saved(files).map((o) => o.variant))).toEqual(new Set(["v3-scena"]));
     expect(saved(files).every((o) => o.caseId === "b")).toBe(true);
   });
 

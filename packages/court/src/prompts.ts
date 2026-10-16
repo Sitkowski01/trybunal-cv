@@ -43,12 +43,22 @@ export function documents(state: TrialState) {
  * Koncowe polecenia zadan i postawa prokuratora jako stale: wariant promptow w ewaluacjach
  * podmienia je w calosci, a reszta promptu (przebieg, oceny) zostaje ta sama.
  */
-export const PROSECUTOR_STANCE = "Jesteś prokuratorem: szukasz najmocniejszego powodu, żeby kandydata odrzucić. Bądź surowy, ale uczciwy.";
+// Wersja v3-scena (ewaluacja 16.10: trafnosc jak v1, rozprawa o 17% tansza): wypowiedzi pisane pod
+// sale — krotkie, do konkretnego krytyka; prokurator konsekwentnie oskarza; sentencja na poczatku uzasadnienia.
+export const PROSECUTOR_STANCE =
+  "Jesteś prokuratorem: szukasz najmocniejszego powodu, żeby kandydata odrzucić. W mowie i w debacie zawsze " +
+  "wnosisz o odrzucenie — to twoja rola. Ocenę 1–10 wystawiasz jednak uczciwie, tak jak przysięgli.";
 export const JUROR_STANCE = "Jesteś przysięgłym: oceniasz niezależnie i uczciwie, z perspektywy swojej roli.";
-export const PROSECUTION_ASK = "Wygłoś mowę oskarżenia: najmocniejsze argumenty za odrzuceniem kandydata, oparte na cytatach z CV.";
+export const PROSECUTION_ASK =
+  "Wygłoś mowę oskarżenia na sali: 3–5 zdań, najwyżej 600 znaków. Dwa, trzy najmocniejsze argumenty za odrzuceniem, " +
+  "każdy oparty na krótkim cytacie z CV. Zakończ wnioskiem o odrzucenie.";
 export const DEBATE_ASK =
-  "Odnieś się do argumentów innych. Jeśli coś cię przekonało, podaj nową ocenę w revisedScore; jeśli nie, revisedScore = null.";
-export const JUDGE_ASK = "Napisz uzasadnienie werdyktu dla kandydata.";
+  "Odpowiedz na sali 2–3 zdaniami, najwyżej 350 znaków. Zwróć się do jednego konkretnego krytyka po nazwie i odnieś się " +
+  "do jego argumentu. Nie przedstawiaj się i nie zaczynaj od „podtrzymuję”. Jeśli coś cię przekonało, podaj nową ocenę " +
+  "w revisedScore; jeśli nie, revisedScore = null.";
+export const JUDGE_ASK =
+  "Zacznij od sentencji: jedno zdanie do 160 znaków, które sędzia ogłasza na sali. Po pustej linii napisz uzasadnienie " +
+  "werdyktu dla kandydata.";
 
 export function instructionsFor(critic: Critic): string {
   const rubric = critic.criteria.map((c) => `- ${c}`).join("\n");
@@ -157,7 +167,7 @@ export interface PromptSet {
 }
 
 export const PROMPTS: PromptSet = {
-  version: "v1",
+  version: "v3-scena",
   rules: RULES,
   instructionsFor,
   judgeInstructions: JUDGE_INSTRUCTIONS,

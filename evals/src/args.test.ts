@@ -1,14 +1,14 @@
 import { PROMPTS } from "@trybunal/court";
 import { describe, expect, it } from "vitest";
 import { HEURISTIC_VARIANT, parseRunArgs, USAGE, UsageError } from "./args.js";
-import { PROMPTS_SCENE, PROMPTS_V2 } from "./variants.js";
+import { PROMPTS_V2 } from "./variants.js";
 
 describe("parseRunArgs", () => {
-  it("wartosci domyslne: Claude, prompty sadu i kandydat, 3 powtorzenia, budzet 15 USD i 1 USD na rozprawe", () => {
+  it("wartosci domyslne: Claude, prompty sadu, 3 powtorzenia, budzet 15 USD i 1 USD na rozprawe", () => {
     expect(parseRunArgs(["--out", "x"])).toEqual({
       out: "x",
       llm: "anthropic",
-      variants: [PROMPTS, PROMPTS_SCENE],
+      variants: [PROMPTS],
       repeats: 3,
       debateRounds: 1,
       cases: null,

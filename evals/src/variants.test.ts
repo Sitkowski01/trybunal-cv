@@ -3,25 +3,30 @@ import { CRITIC_IDS, type CriticId, criticById, pendingVerdict, replay, type Tri
 import { describe, expect, it } from "vitest";
 import {
   ANCHORS,
-  PROMPTS_SCENE,
+  DEFAULT_VARIANTS,
+  PROMPTS_V1,
   PROMPTS_V2,
   replaceEnding,
   SCALE_LINE,
-  SCENE_DEBATE_ASK,
-  SCENE_JUDGE_ASK,
-  SCENE_PROSECUTION_ASK,
-  SCENE_PROSECUTOR_STANCE,
+  V1_DEBATE_ASK,
+  V1_JUDGE_ASK,
+  V1_PROSECUTION_ASK,
+  V1_PROSECUTOR_STANCE,
   VARIANTS,
   variantByVersion,
 } from "./variants.js";
 
 describe("warianty promptow", () => {
-  it("v1 to prompty sadu, v2 rozni sie tylko zasadami: kotwice zastepuja linie skali", () => {
+  it("v1 i v2 do odtworzenia wynikow, prompty sadu na koncu i domyslnie", () => {
     expect(VARIANTS.map((v) => v.version)).toEqual(["v1", "v2-kotwice", "v3-scena"]);
-    expect(VARIANTS[0]).toBe(PROMPTS);
-    const [before = "", after = ""] = PROMPTS.rules.split(SCALE_LINE);
+    expect(VARIANTS.at(-1)).toBe(PROMPTS);
+    expect(DEFAULT_VARIANTS).toEqual([PROMPTS]);
+  });
+
+  it("v2 to v1 z kotwicami zamiast linii skali", () => {
+    const [before = "", after = ""] = PROMPTS_V1.rules.split(SCALE_LINE);
     expect(after.length).toBeGreaterThan(0);
-    expect(PROMPTS_V2).toEqual({ ...PROMPTS, version: "v2-kotwice", rules: `${before}${ANCHORS}${after}` });
+    expect(PROMPTS_V2).toEqual({ ...PROMPTS_V1, version: "v2-kotwice", rules: `${before}${ANCHORS}${after}` });
     // Jedna skala, nie dwie.
     expect(PROMPTS_V2.rules.match(/Skala ocen/g)).toHaveLength(1);
     expect(PROMPTS_V2.rules).not.toContain("6–7 zaprosić");
@@ -35,11 +40,12 @@ describe("warianty promptow", () => {
   it("wersje sa unikalne i da sie je znalezc po nazwie", () => {
     expect(new Set(VARIANTS.map((v) => v.version)).size).toBe(VARIANTS.length);
     expect(variantByVersion("v2-kotwice")).toBe(PROMPTS_V2);
-    expect(variantByVersion("v3")).toBeUndefined();
+    expect(variantByVersion("v1")).toBe(PROMPTS_V1);
+    expect(variantByVersion("v9")).toBeUndefined();
   });
 });
 
-describe("v3-scena", () => {
+describe("v1 odtworzone z promptow sadu", () => {
   const assessment = (criticId: CriticId, score: number): TrialEvent => ({
     type: "AssessmentSubmitted",
     assessment: { criticId, score, summary: "ok", strengths: [], concerns: [], rewrites: [] },
@@ -51,26 +57,19 @@ describe("v3-scena", () => {
   ];
   const state = replay(events);
 
-  it("podmienia tylko koncowe polecenia i postawe prokuratora; zasady i przebieg jak w v1", () => {
-    expect(PROMPTS_SCENE).toMatchObject({ version: "v3-scena", rules: PROMPTS.rules, assessmentTask: PROMPTS.assessmentTask, judgeInstructions: PROMPTS.judgeInstructions });
-    expect(PROMPTS_SCENE.prosecutionTask(state)).toBe(PROMPTS.prosecutionTask(state).replace(PROSECUTION_ASK, SCENE_PROSECUTION_ASK));
-    expect(PROMPTS_SCENE.debateTask(state, "hr")).toBe(PROMPTS.debateTask(state, "hr").replace(DEBATE_ASK, SCENE_DEBATE_ASK));
+  it("podmienia tylko koncowe polecenia i postawe prokuratora; zasady i przebieg wspolne", () => {
+    expect(PROMPTS_V1).toMatchObject({ version: "v1", rules: PROMPTS.rules, assessmentTask: PROMPTS.assessmentTask, judgeInstructions: PROMPTS.judgeInstructions });
+    expect(PROMPTS_V1.prosecutionTask(state)).toBe(PROMPTS.prosecutionTask(state).replace(PROSECUTION_ASK, V1_PROSECUTION_ASK));
+    expect(PROMPTS_V1.debateTask(state, "hr")).toBe(PROMPTS.debateTask(state, "hr").replace(DEBATE_ASK, V1_DEBATE_ASK));
     const verdict = pendingVerdict(replay([...events, ...CRITIC_IDS.map((id): TrialEvent => ({ type: "StatementMade", round: 1, criticId: id, statement: "x", revisedScore: null }))]));
-    expect(PROMPTS_SCENE.judgeTask(state, verdict).endsWith(SCENE_JUDGE_ASK)).toBe(true);
-    expect(PROMPTS_SCENE.judgeTask(state, verdict)).not.toContain(JUDGE_ASK);
+    expect(PROMPTS_V1.judgeTask(state, verdict).endsWith(V1_JUDGE_ASK)).toBe(true);
+    expect(PROMPTS_V1.judgeTask(state, verdict)).not.toContain(JUDGE_ASK);
   });
 
-  it("prokurator zawsze wnosi o odrzucenie, ale ocenia uczciwie; przysiegli bez zmian", () => {
-    expect(PROMPTS_SCENE.instructionsFor(criticById("prosecutor"))).toContain(SCENE_PROSECUTOR_STANCE);
-    expect(PROMPTS_SCENE.instructionsFor(criticById("prosecutor"))).not.toContain(PROSECUTOR_STANCE);
-    expect(PROMPTS_SCENE.instructionsFor(criticById("hr"))).toBe(PROMPTS.instructionsFor(criticById("hr")));
-  });
-
-  it("wypowiedzi pod dymek: limity dlugosci, zwrot do krytyka, sentencja sedziego", () => {
-    expect(SCENE_DEBATE_ASK).toContain("najwyżej 350 znaków");
-    expect(SCENE_DEBATE_ASK).toContain("po nazwie");
-    expect(SCENE_PROSECUTION_ASK).toContain("najwyżej 600 znaków");
-    expect(SCENE_JUDGE_ASK).toContain("sentencji");
+  it("prokurator v1 bez obowiazku wnoszenia o odrzucenie; przysiegli bez zmian", () => {
+    expect(PROMPTS_V1.instructionsFor(criticById("prosecutor"))).toContain(V1_PROSECUTOR_STANCE);
+    expect(PROMPTS_V1.instructionsFor(criticById("prosecutor"))).not.toContain(PROSECUTOR_STANCE);
+    expect(PROMPTS_V1.instructionsFor(criticById("hr"))).toBe(PROMPTS.instructionsFor(criticById("hr")));
   });
 
   it("zadanie bez oczekiwanego zakonczenia: blad, a nie cicha zmiana srodka promptu", () => {

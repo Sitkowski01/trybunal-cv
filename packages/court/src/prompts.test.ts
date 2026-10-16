@@ -160,9 +160,9 @@ describe("pełne prompty — zmiana tekstu promptu ma być widoczna w review", (
 });
 
 describe("PROMPTS", () => {
-  it("biezaca wersja v1 sklada sie z promptow tego modulu", () => {
+  it("biezaca wersja v3-scena sklada sie z promptow tego modulu", () => {
     expect(PROMPTS).toEqual({
-      version: "v1",
+      version: "v3-scena",
       rules: RULES,
       instructionsFor,
       judgeInstructions: JUDGE_INSTRUCTIONS,
