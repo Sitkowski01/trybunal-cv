@@ -1,4 +1,4 @@
-import { EXAMPLE } from "../filing/example.js";
+import { DEMO_CASE } from "./case.js";
 
 export const REPO_URL = "https://github.com/Sitkowski01/trybunal-cv";
 
@@ -18,13 +18,14 @@ export function DemoIntro({ onOpen }: DemoIntroProps) {
         Ta strona nie ma serwera ani modelu. Odtwarza nagranie jednej rozprawy nad fikcyjnym CV — te same zdarzenia, które przyszły z API,
         w tym koszt wywołań modelu.
       </p>
+      <p className="demo__case">{DEMO_CASE.summary}</p>
       <details>
         <summary>CV kandydatki</summary>
-        <pre className="demo__doc">{EXAMPLE.cv}</pre>
+        <pre className="demo__doc">{DEMO_CASE.cv}</pre>
       </details>
       <details>
         <summary>Ogłoszenie o pracę</summary>
-        <pre className="demo__doc">{EXAMPLE.offer}</pre>
+        <pre className="demo__doc">{DEMO_CASE.offer}</pre>
       </details>
       <div className="demo__actions">
         <button type="button" onClick={onOpen}>

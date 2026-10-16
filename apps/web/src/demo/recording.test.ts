@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { EXAMPLE } from "../filing/example.js";
 import { BadEnvelopeError } from "../trial/envelope.js";
 import { toSse } from "../test/sse.js";
 import { envelopes, trial } from "../test/trials.js";
 import committed from "./recording.sse?raw";
+import { DEMO_CASE } from "./case.js";
 import { BadRecordingError, readRecording } from "./recording.js";
 
 const full = envelopes(trial([7, 6, 5, 7, 3], [[null, null, 6, null, null]]));
@@ -50,11 +50,12 @@ describe("readRecording", () => {
     expect(() => readRecording(toSse(gap))).toThrow(new BadRecordingError("Zdarzenie 4 ma numer 5"));
   });
 
-  it("nagranie w repozytorium: pelna rozprawa nad przykladowym CV z formularza", () => {
+  it("nagranie w repozytorium: pelna rozprawa nad CV z demo, z debata w dwoch rundach", () => {
     const { events } = readRecording(committed);
     const filed = events[0]?.envelope.event;
     // Serwer przycina tekst i ukrywa imie i nazwisko ([KANDYDAT]) — po dlugosci oferty poznac, ze to ta sama sprawa.
-    expect(filed?.type === "TrialFiled" && filed.jobOfferChars).toBe(EXAMPLE.offer.trim().length);
+    expect(filed?.type === "TrialFiled" && filed.jobOfferChars).toBe(DEMO_CASE.offer.trim().length);
     expect(events.at(-1)?.envelope.event.type).toBe("VerdictAnnounced");
+    expect(events.filter((e) => e.envelope.event.type === "StatementMade")).toHaveLength(10);
   });
 });

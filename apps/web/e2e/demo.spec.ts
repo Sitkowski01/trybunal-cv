@@ -12,7 +12,7 @@ test("demo: strona startowa, odtworzenie nagrania do werdyktu, bez zadnego zapyt
   await expect(page.getByText("Demo — odtwarzanie nagranej rozprawy")).toBeVisible();
   await expect(page.getByRole("button", { name: "Wnieś sprawę" })).toHaveCount(0);
   await page.getByText("CV kandydatki").click();
-  await expect(page.getByText("Anna Nowak").first()).toBeVisible();
+  await expect(page.getByText("Monika Sadowska").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Otwórz rozprawę" }).click();
   await expect(page).toHaveURL(/rozprawa=nagranie/u);
@@ -20,7 +20,7 @@ test("demo: strona startowa, odtworzenie nagrania do werdyktu, bez zadnego zapyt
   await expect(page.getByRole("heading", { name: /Zaprosić|Odrzucić/u })).toBeVisible();
   await expect(page.locator(".trial__cost")).not.toHaveText("Koszt: $0.0000");
   // Nagranie ma dane po anonimizacji: imie i nazwisko kandydatki nie trafilo do sadu.
-  await expect(page.locator("main")).not.toContainText("Anna Nowak");
+  await expect(page.locator("main")).not.toContainText("Monika Sadowska");
   expect(apiCalls).toEqual([]);
 });
 
