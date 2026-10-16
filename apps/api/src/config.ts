@@ -16,6 +16,8 @@ const EnvSchema = z
     DATABASE_URL: z.url().optional(),
     /** 32 bajty base64; wymagany z baza — inaczej po restarcie zadnej rozprawy nie da sie odczytac. */
     TRYBUNAL_MASTER_KEY: z.string().optional(),
+    /** Albo sciezka do pliku z kluczem (sekret Dockera, wolumen) — klucz nie trafia do zmiennych srodowiska. */
+    TRYBUNAL_MASTER_KEY_FILE: z.string().optional(),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     /** 1: rozprawy bez modelu (proba generalna) — demo, frontend, e2e. */
     TRYBUNAL_REHEARSAL: flag.default(false),
@@ -29,8 +31,12 @@ const EnvSchema = z
     TRUST_PROXY: flag.default(false),
   })
   .superRefine((env, ctx) => {
-    if (env.DATABASE_URL !== undefined && env.TRYBUNAL_MASTER_KEY === undefined) {
+    const keys = [env.TRYBUNAL_MASTER_KEY, env.TRYBUNAL_MASTER_KEY_FILE].filter((key) => key !== undefined).length;
+    if (env.DATABASE_URL !== undefined && keys === 0) {
       ctx.addIssue({ code: "custom", path: ["TRYBUNAL_MASTER_KEY"], message: "wymagany razem z DATABASE_URL (openssl rand -base64 32)" });
+    }
+    if (keys === 2) {
+      ctx.addIssue({ code: "custom", path: ["TRYBUNAL_MASTER_KEY_FILE"], message: "podaj klucz albo plik z kluczem, nie oba" });
     }
     if (env.ANTHROPIC_API_KEY === undefined && !env.TRYBUNAL_REHEARSAL) {
       ctx.addIssue({ code: "custom", path: ["ANTHROPIC_API_KEY"], message: "brak klucza — ustaw go albo TRYBUNAL_REHEARSAL=1" });
@@ -54,3 +60,10 @@ export function readConfig(env: Readonly<Record<string, string | undefined>>): S
 }
 
 export const toNanoUsd = (usdAmount: number) => Math.round(usdAmount * 1e9);
+
+/** Klucz glowny (base64) ze zmiennej albo z pliku; undefined, gdy nie podano zadnego. */
+export function masterKeyText(config: ServerConfig, readFile: (path: string) => string): string | undefined {
+  if (config.TRYBUNAL_MASTER_KEY_FILE === undefined) return config.TRYBUNAL_MASTER_KEY;
+  // Plik z echo albo base64 konczy sie nowa linia.
+  return readFile(config.TRYBUNAL_MASTER_KEY_FILE).trim();
+}

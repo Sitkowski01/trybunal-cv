@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readConfig, toNanoUsd } from "./config.js";
+import { masterKeyText, readConfig, toNanoUsd } from "./config.js";
 
 describe("readConfig", () => {
   it("wartosci domyslne: demo w pamieci z proba generalna", () => {
@@ -27,6 +27,7 @@ describe("readConfig", () => {
   it.each([
     [{ TRYBUNAL_REHEARSAL: "0" }, "ANTHROPIC_API_KEY: brak klucza"],
     [{ ANTHROPIC_API_KEY: "sk", DATABASE_URL: "postgres://db/x" }, "TRYBUNAL_MASTER_KEY: wymagany razem z DATABASE_URL"],
+    [{ ANTHROPIC_API_KEY: "sk", TRYBUNAL_MASTER_KEY: "k", TRYBUNAL_MASTER_KEY_FILE: "/k" }, "TRYBUNAL_MASTER_KEY_FILE: podaj klucz albo plik z kluczem, nie oba"],
     [{ ANTHROPIC_API_KEY: "sk", TRIAL_BUDGET_USD: "6" }, "TRIAL_BUDGET_USD: budzet rozprawy wiekszy niz budzet dnia"],
     [{ ANTHROPIC_API_KEY: "sk", PORT: "70000" }, "PORT: "],
     [{ ANTHROPIC_API_KEY: "sk", DAILY_BUDGET_USD: "-1" }, "DAILY_BUDGET_USD: "],
@@ -54,5 +55,22 @@ describe("readConfig — granice", () => {
 
   it("kazdy problem w osobnej linii", () => {
     expect(() => readConfig({ PORT: "x", DAILY_BUDGET_USD: "-1" })).toThrow(/^Bledna konfiguracja serwera:\n {2}PORT: [^\n]+\n {2}DAILY_BUDGET_USD: [^\n]+$/u);
+  });
+});
+
+describe("masterKeyText", () => {
+  const db = { ANTHROPIC_API_KEY: "sk", DATABASE_URL: "postgres://db/x" };
+  const files = (path: string) => (path === "/run/klucz" ? "a2V5\n" : "");
+
+  it("klucz ze zmiennej", () => {
+    expect(masterKeyText(readConfig({ ...db, TRYBUNAL_MASTER_KEY: "a2V5" }), files)).toBe("a2V5");
+  });
+
+  it("albo z pliku (baza z samym plikiem jest poprawna), bez konca linii", () => {
+    expect(masterKeyText(readConfig({ ...db, TRYBUNAL_MASTER_KEY_FILE: "/run/klucz" }), files)).toBe("a2V5");
+  });
+
+  it("bez bazy i bez klucza: brak", () => {
+    expect(masterKeyText(readConfig({ ANTHROPIC_API_KEY: "sk" }), files)).toBeUndefined();
   });
 });
