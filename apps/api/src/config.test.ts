@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { masterKeyText, readConfig, toNanoUsd } from "./config.js";
+import { readConfig, toNanoUsd, withFileSecrets } from "./config.js";
 
 describe("readConfig", () => {
   it("wartosci domyslne: demo w pamieci z proba generalna", () => {
@@ -27,7 +27,6 @@ describe("readConfig", () => {
   it.each([
     [{ TRYBUNAL_REHEARSAL: "0" }, "ANTHROPIC_API_KEY: brak klucza"],
     [{ ANTHROPIC_API_KEY: "sk", DATABASE_URL: "postgres://db/x" }, "TRYBUNAL_MASTER_KEY: wymagany razem z DATABASE_URL"],
-    [{ ANTHROPIC_API_KEY: "sk", TRYBUNAL_MASTER_KEY: "k", TRYBUNAL_MASTER_KEY_FILE: "/k" }, "TRYBUNAL_MASTER_KEY_FILE: podaj klucz albo plik z kluczem, nie oba"],
     [{ ANTHROPIC_API_KEY: "sk", TRIAL_BUDGET_USD: "6" }, "TRIAL_BUDGET_USD: budzet rozprawy wiekszy niz budzet dnia"],
     [{ ANTHROPIC_API_KEY: "sk", PORT: "70000" }, "PORT: "],
     [{ ANTHROPIC_API_KEY: "sk", DAILY_BUDGET_USD: "-1" }, "DAILY_BUDGET_USD: "],
@@ -58,19 +57,42 @@ describe("readConfig — granice", () => {
   });
 });
 
-describe("masterKeyText", () => {
-  const db = { ANTHROPIC_API_KEY: "sk", DATABASE_URL: "postgres://db/x" };
-  const files = (path: string) => (path === "/run/klucz" ? "a2V5\n" : "");
+describe("withFileSecrets", () => {
+  const files: Record<string, string> = { "/run/db": "postgres://u:tajne@db:5432/t\n", "/run/klucz": "a2V5\n", "/run/api": "sk-1" };
+  const read = (path: string) => {
+    const text = files[path];
+    if (text === undefined) throw new Error("ENOENT");
+    return text;
+  };
 
-  it("klucz ze zmiennej", () => {
-    expect(masterKeyText(readConfig({ ...db, TRYBUNAL_MASTER_KEY: "a2V5" }), files)).toBe("a2V5");
+  it("sekrety z plikow, bez konca linii; reszta zmiennych bez zmian", () => {
+    const env = { DATABASE_URL_FILE: "/run/db", TRYBUNAL_MASTER_KEY_FILE: "/run/klucz", ANTHROPIC_API_KEY_FILE: "/run/api", PORT: "8080" };
+    expect(withFileSecrets(env, read)).toEqual({
+      ...env,
+      DATABASE_URL: "postgres://u:tajne@db:5432/t",
+      TRYBUNAL_MASTER_KEY: "a2V5",
+      ANTHROPIC_API_KEY: "sk-1",
+    });
   });
 
-  it("albo z pliku (baza z samym plikiem jest poprawna), bez konca linii", () => {
-    expect(masterKeyText(readConfig({ ...db, TRYBUNAL_MASTER_KEY_FILE: "/run/klucz" }), files)).toBe("a2V5");
+  it("bez plikow (albo z pustym _FILE, jak w .env.example) zmienne zostaja; nie dotyka innych _FILE", () => {
+    const env = { DATABASE_URL: "postgres://db/x", TRYBUNAL_MASTER_KEY_FILE: "", OTHER_FILE: "/run/klucz" };
+    expect(withFileSecrets(env, read)).toEqual(env);
   });
 
-  it("bez bazy i bez klucza: brak", () => {
-    expect(masterKeyText(readConfig({ ANTHROPIC_API_KEY: "sk" }), files)).toBeUndefined();
+  it("pusta zmienna obok pliku liczy sie jak brak", () => {
+    expect(withFileSecrets({ TRYBUNAL_MASTER_KEY: "", TRYBUNAL_MASTER_KEY_FILE: "/run/klucz" }, read).TRYBUNAL_MASTER_KEY).toBe("a2V5");
+  });
+
+  it("wartosc i plik naraz albo brak pliku: blad z nazwa zmiennej, wszystkie problemy naraz", () => {
+    const env = { ANTHROPIC_API_KEY: "sk", ANTHROPIC_API_KEY_FILE: "/run/api", DATABASE_URL_FILE: "/nie/ma" };
+    expect(() => withFileSecrets(env, read)).toThrow(
+      "Bledna konfiguracja serwera:\n  DATABASE_URL_FILE: nie mozna odczytac pliku /nie/ma\n  ANTHROPIC_API_KEY_FILE: podaj ANTHROPIC_API_KEY albo ANTHROPIC_API_KEY_FILE, nie oba",
+    );
+  });
+
+  it("adres bazy z pliku przechodzi zwykla walidacje konfiguracji", () => {
+    const config = readConfig(withFileSecrets({ DATABASE_URL_FILE: "/run/db", TRYBUNAL_MASTER_KEY_FILE: "/run/klucz", TRYBUNAL_REHEARSAL: "1" }, read));
+    expect(config).toMatchObject({ DATABASE_URL: "postgres://u:tajne@db:5432/t", TRYBUNAL_MASTER_KEY: "a2V5" });
   });
 });

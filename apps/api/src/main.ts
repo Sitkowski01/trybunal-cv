@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { AnthropicLlmClient } from "@trybunal/llm";
 import pg from "pg";
 import { buildApp } from "./app.js";
-import { masterKeyText, readConfig, toNanoUsd } from "./config.js";
+import { readConfig, toNanoUsd, withFileSecrets } from "./config.js";
 import { newKey, parseMasterKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
 import { Journal } from "./journal.js";
@@ -15,7 +15,7 @@ import { InMemoryEventStore } from "./store.js";
 if (existsSync(".env")) {
   process.loadEnvFile(".env");
 }
-const config = readConfig(process.env);
+const config = readConfig(withFileSecrets(process.env, (path) => readFileSync(path, "utf8")));
 
 let pool: pg.Pool | undefined;
 let journal: Journal;
@@ -29,7 +29,7 @@ if (config.DATABASE_URL === undefined) {
     console.error("Blad polaczenia z baza:", error.message);
   });
   await migrate(pool);
-  journal = new Journal(new PostgresEventStore(pool), parseMasterKey(masterKeyText(config, (path) => readFileSync(path, "utf8")) ?? ""));
+  journal = new Journal(new PostgresEventStore(pool), parseMasterKey(config.TRYBUNAL_MASTER_KEY ?? ""));
 }
 
 const apiKey = config.ANTHROPIC_API_KEY;
