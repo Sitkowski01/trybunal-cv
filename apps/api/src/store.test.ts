@@ -7,9 +7,9 @@ describeEventStore("w pamieci", () => Promise.resolve(new InMemoryEventStore()))
 describe("InMemoryEventStore", () => {
   it("konflikty z komunikatem, co poszlo nie tak", async () => {
     const store = new InMemoryEventStore();
-    await store.createTrial("t", Buffer.from("k"));
+    await store.createTrial("t", Buffer.from("k"), new Date());
     const record = { trialId: "t", seq: 2, type: "TrialFiled", occurredAt: new Date(), schemaVersion: 1, payload: Buffer.from([1]), calls: [] };
-    await expect(store.createTrial("t", Buffer.from("k"))).rejects.toThrow("Rozprawa t juz istnieje");
+    await expect(store.createTrial("t", Buffer.from("k"), new Date())).rejects.toThrow("Rozprawa t juz istnieje");
     await expect(store.append({ ...record, trialId: "x" })).rejects.toThrow("Nie ma rozprawy x");
     await expect(store.append(record)).rejects.toThrow("Zdarzenie 2 nie jest kolejnym w rozprawie t");
   });
@@ -17,7 +17,7 @@ describe("InMemoryEventStore", () => {
   it("trzyma kopie buforow — zmiana po zapisie nie psuje dziennika", async () => {
     const store = new InMemoryEventStore();
     const key = Buffer.from("klucz");
-    await store.createTrial("t", key);
+    await store.createTrial("t", key, new Date());
     const payload = Buffer.from([1]);
     await store.append({ trialId: "t", seq: 1, type: "TrialFiled", occurredAt: new Date(), schemaVersion: 1, payload, calls: [] });
     key[0] = 0;

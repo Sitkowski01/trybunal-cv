@@ -23,6 +23,10 @@ export const MIGRATIONS: readonly string[] = [
      PRIMARY KEY (trial_id, seq)
    );
    CREATE INDEX trial_events_occurred_at ON trial_events (occurred_at);`,
+  // Koniec i puls rozprawy w bazie: przy kilku instancjach API kazda wie, czy rozprawa jeszcze trwa.
+  // Indeks po dacie zalozenia: retencja kluczy szuka starych rozpraw.
+  `ALTER TABLE trials ADD COLUMN ended_at timestamptz, ADD COLUMN alive_at timestamptz;
+   CREATE INDEX trials_created_at ON trials (created_at);`,
 ];
 
 const MIGRATION_LOCK = 7_211_001;
@@ -135,5 +139,27 @@ export class PostgresEventStore implements EventStore {
       [since],
     );
     return Number(rows[0]?.total ?? 0);
+  }
+
+  async markEnded(trialId: string, endedAt: Date): Promise<void> {
+    await this.pool.query("UPDATE trials SET ended_at = $2 WHERE trial_id = $1", [trialId, endedAt]);
+  }
+
+  async touch(trialIds: readonly string[], at: Date): Promise<void> {
+    await this.pool.query("UPDATE trials SET alive_at = $2 WHERE trial_id = ANY($1::text[])", [trialIds, at]);
+  }
+
+  async isActive(trialId: string, aliveSince: Date): Promise<boolean> {
+    // Bez pulsu (rozprawa dopiero zalozona) liczy sie chwila zalozenia.
+    const { rows } = await this.pool.query(
+      "SELECT 1 FROM trials WHERE trial_id = $1 AND ended_at IS NULL AND coalesce(alive_at, created_at) > $2",
+      [trialId, aliveSince],
+    );
+    return rows.length === 1;
+  }
+
+  async expireKeys(before: Date): Promise<number> {
+    const result = await this.pool.query("UPDATE trials SET wrapped_key = NULL WHERE created_at < $1 AND wrapped_key IS NOT NULL", [before]);
+    return result.rowCount ?? 0;
   }
 }

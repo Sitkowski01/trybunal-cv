@@ -86,5 +86,38 @@ export function describeEventStore(name: string, create: () => Promise<EventStor
       expect(await store.spentSince(new Date(Date.UTC(2026, 9, 12, 10, 0, 3)))).toBe(3);
       expect(await store.spentSince(new Date(Date.UTC(2026, 9, 13)))).toBe(0);
     });
+
+    it("trwa: bez konca i z pulsem (albo zalozeniem) po podanej chwili; koniec dotyczy tylko tej rozprawy", async () => {
+      const created = new Date(Date.UTC(2026, 9, 17, 12));
+      await store.createTrial("t-2", Buffer.from("k2"), created);
+      await store.createTrial("t-3", Buffer.from("k3"), created);
+      const before = new Date(Date.UTC(2026, 9, 17, 11));
+      expect(await store.isActive("t-2", before)).toBe(true);
+      // Bez pulsu po granicy — instancja padla w trakcie, nikt jej nie dokonczy.
+      expect(await store.isActive("t-2", created)).toBe(false);
+      // Puls przywraca; dotyczy tylko wskazanych rozpraw (nieznane pomija).
+      await store.touch(["t-2", "brak"], new Date(Date.UTC(2026, 9, 17, 12, 1)));
+      expect(await store.isActive("t-2", created)).toBe(true);
+      expect(await store.isActive("t-3", created)).toBe(false);
+      await store.markEnded("t-2", new Date(Date.UTC(2026, 9, 17, 12, 5)));
+      expect(await store.isActive("t-2", before)).toBe(false);
+      expect(await store.isActive("t-3", before)).toBe(true);
+      expect(await store.isActive("brak", before)).toBe(false);
+      await store.markEnded("brak", new Date());
+    });
+
+    it("retencja: klucze rozpraw starszych niz granica usuniete, zdarzenia i nowsze rozprawy zostaja", async () => {
+      await store.createTrial("stara", Buffer.from("k"), new Date(Date.UTC(2026, 8, 1)));
+      await store.createTrial("zapomniana", Buffer.from("k"), new Date(Date.UTC(2026, 8, 1)));
+      await store.forget("zapomniana");
+      await store.createTrial("nowa", Buffer.from("k"), new Date(Date.UTC(2026, 9, 16)));
+      await store.append(record("stara", 1));
+      // Juz zapomniana nie liczy sie drugi raz.
+      expect(await store.expireKeys(new Date(Date.UTC(2026, 9, 1)))).toBe(1);
+      expect(await store.wrappedKey("stara")).toBeNull();
+      expect(await store.read("stara", 0)).toEqual([record("stara", 1)]);
+      expect(await store.wrappedKey("nowa")).toEqual(Buffer.from("k"));
+      expect(await store.expireKeys(new Date(Date.UTC(2026, 9, 1)))).toBe(0);
+    });
   });
 }

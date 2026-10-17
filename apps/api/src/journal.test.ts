@@ -2,7 +2,7 @@ import type { CallRecord } from "@trybunal/court";
 import type { TrialEvent } from "@trybunal/domain";
 import { describe, expect, it } from "vitest";
 import { DecryptionError, newKey } from "./crypto.js";
-import { Journal, SCHEMA_VERSION, TrialForgottenError, TrialNotFoundError } from "./journal.js";
+import { ALIVE_MS, Journal, SCHEMA_VERSION, TrialForgottenError, TrialNotFoundError } from "./journal.js";
 import { ConflictError, InMemoryEventStore } from "./store.js";
 
 const filed: TrialEvent = { type: "TrialFiled", trialId: "t-1", cvText: "Anna Nowak, Java", jobOffer: "Junior Java", debateRounds: 1 };
@@ -85,12 +85,46 @@ describe("Journal", () => {
     const [record] = await store.read("t-1", 0);
     if (record === undefined) throw new Error("brak zdarzenia");
     const tampered = new InMemoryEventStore();
-    await tampered.createTrial("t-1", (await store.wrappedKey("t-1")) ?? Buffer.alloc(0));
+    await tampered.createTrial("t-1", (await store.wrappedKey("t-1")) ?? Buffer.alloc(0), new Date());
     await tampered.append({ ...record, schemaVersion: 2 });
     await expect(new Journal(tampered, masterKey).read("t-1")).rejects.toThrow("Nieznana wersja schematu zdarzenia: 2");
 
     const bad = new Journal(store, masterKey, () => at);
     await bad.append("t-1", 2, { type: "ProsecutionDelivered", speech: "" }, []);
     await expect(bad.read("t-1")).rejects.toThrow(/speech/);
+  });
+});
+
+describe("Journal — trwanie i retencja", () => {
+  it("rozprawa trwa do konca, dopoki ma puls; bez pulsu przez ALIVE_MS juz nie", async () => {
+    const store = new InMemoryEventStore();
+    let now = at.getTime();
+    const journal = new Journal(store, newKey(), () => new Date(now));
+    await journal.create("t-1");
+    await journal.create("t-2");
+    expect(await journal.isActive("t-1")).toBe(true);
+    await journal.markEnded("t-1");
+    expect(await journal.isActive("t-1")).toBe(false);
+    now += ALIVE_MS - 1;
+    expect(await journal.isActive("t-2")).toBe(true);
+    await journal.touch(["t-2"]);
+    now += ALIVE_MS - 1;
+    expect(await journal.isActive("t-2")).toBe(true);
+    now += 1;
+    expect(await journal.isActive("t-2")).toBe(false);
+  });
+
+  it("retencja usuwa klucze rozpraw starszych niz liczba dni — potem odczyt jak po zapomnieniu", async () => {
+    const store = new InMemoryEventStore();
+    let now = at.getTime();
+    const journal = new Journal(store, newKey(), () => new Date(now));
+    await journal.create("stara");
+    now += 30 * 24 * 60 * 60_000;
+    await journal.create("nowa");
+    expect(await journal.expireOlderThan(30)).toBe(0);
+    now += 1;
+    expect(await journal.expireOlderThan(30)).toBe(1);
+    await expect(journal.read("stara")).rejects.toBeInstanceOf(TrialForgottenError);
+    await expect(journal.assertReadable("nowa")).resolves.toBeUndefined();
   });
 });

@@ -6,6 +6,14 @@ import type { EventStore } from "./store.js";
 /** Wersja ksztaltu zdarzen w dzienniku. Zmiana schematu = nowa wersja + przeksztalcenie starych przy odczycie. */
 export const SCHEMA_VERSION = 1;
 
+/**
+ * Puls: instancja prowadzaca rozprawe potwierdza co tyle, ze rozprawa trwa. Bez pulsu przez
+ * ALIVE_MS (trzy pominiete) instancja padla albo zostala zrestartowana — nikt rozprawy nie dokonczy.
+ */
+export const HEARTBEAT_MS = 15_000;
+export const ALIVE_MS = 3 * HEARTBEAT_MS;
+const DAY_MS = 24 * 60 * 60_000;
+
 /** Koperta zdarzenia: to wysyla SSE i to odtwarza powtorka. */
 export interface EventEnvelope {
   readonly trialId: string;
@@ -87,6 +95,26 @@ export class Journal {
 
   spentSince(since: Date): Promise<number> {
     return this.store.spentSince(since);
+  }
+
+  /** Rozprawa przestala trwac — zapis w bazie, zeby wiedzialy o tym inne instancje API. */
+  markEnded(trialId: string): Promise<void> {
+    return this.store.markEnded(trialId, this.now());
+  }
+
+  /** Puls rozpraw tej instancji — zob. HEARTBEAT_MS. */
+  touch(trialIds: readonly string[]): Promise<void> {
+    return this.store.touch(trialIds, this.now());
+  }
+
+  /** Czy rozprawa trwa (w tej albo innej instancji): bez konca i z pulsem z ostatnich ALIVE_MS. */
+  isActive(trialId: string): Promise<boolean> {
+    return this.store.isActive(trialId, new Date(this.now().getTime() - ALIVE_MS));
+  }
+
+  /** Retencja: usuwa klucze rozpraw starszych niz podana liczba dni; zwraca, ile usunieto. */
+  expireOlderThan(days: number): Promise<number> {
+    return this.store.expireKeys(new Date(this.now().getTime() - days * DAY_MS));
   }
 
   private async key(trialId: string): Promise<Buffer> {
