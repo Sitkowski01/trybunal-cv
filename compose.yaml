@@ -38,8 +38,12 @@ services:
       interval: 2s
       retries: 30
 
+  # Dwie instancje za nginx: zdarzenia rozpraw i anulowanie ida miedzy nimi przez Postgres NOTIFY,
+  # wiec strumien SSE moze trafic do innej instancji niz ta, ktora prowadzi rozprawe.
   api:
     build: { context: ., target: api }
+    deploy:
+      replicas: 2
     depends_on:
       db: { condition: service_healthy }
     environment:

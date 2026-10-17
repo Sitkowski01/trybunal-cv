@@ -153,6 +153,14 @@ Test na prawdziwym API uruchamia się tylko z kluczem:
 - **Dziennik zdarzeń.** Każde zdarzenie w kopercie (numer, czas, wersja schematu, koszt wywołań
   modelu); treść zaszyfrowana kluczem rozprawy (AES-256-GCM), klucz rozprawy — kluczem głównym.
   Usunięcie klucza rozprawy czyni treść nieczytelną, a koszty zostają do statystyk.
+- **Retencja.** Po `TRIAL_RETENTION_DAYS` dniach (domyślnie 30) klucz rozprawy znika sam, jak przy
+  „Zapomnij rozprawę”; sprzątanie przy starcie i co godzinę.
+- **Kilka instancji API na jednej bazie.** Strumień SSE może trafić do innej instancji niż ta, która
+  prowadzi rozprawę, a „Przerwij” — jeszcze gdzie indziej. Zdarzenia, koniec rozprawy i prośby
+  o anulowanie idą przez Postgres `LISTEN/NOTIFY` (w komunikacie sam numer zdarzenia — treść jest
+  zaszyfrowana w dzienniku, odbiorca ją doczytuje). Instancja prowadząca rozprawę co 15 s zapisuje
+  puls; rozprawa bez pulsu przez 45 s to rozprawa instancji, która padła — strumień kończy się jako
+  przerwany, zamiast czekać w nieskończoność. Bez bazy działa to samo w procesie.
 - **Limity.** Długość pól, rozprawy naraz, budżet rozprawy i dnia (trwające rezerwują pełny
   budżet), liczba wniesień z jednego adresu na godzinę.
 - **Próba generalna** (`TRYBUNAL_REHEARSAL=1`): cała rozprawa bez modelu i bez klucza;
@@ -302,7 +310,7 @@ pnpm --filter @trybunal/web build:demo      # -> apps/web/dist-demo
 
 ## Docker
 
-`docker compose up --build` stawia Postgresa, API i nginx z frontendem (http://localhost:8080).
+`docker compose up --build` stawia Postgresa, dwie instancje API i nginx z frontendem (http://localhost:8080).
 
 - **Żadnych sekretów w repozytorium**: jednorazowy kontener losuje przy pierwszym starcie klucz główny
   szyfrowania i hasło bazy do wolumenu (każdy plik czyta tylko jego właściciel). Postgres bierze hasło
@@ -312,9 +320,10 @@ pnpm --filter @trybunal/web build:demo      # -> apps/web/dist-demo
   `X-Forwarded-For` jest nadpisywany adresem klienta — podrzucony przez klienta nie obejdzie limitu wniesień.
 - Obraz API ma tylko zależności produkcyjne (`pnpm deploy --prod`) i działa jako użytkownik bez uprawnień roota.
 - Bez klucza rozprawy idą w próbie generalnej; z modelem:
-  `ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build`.
-- CI uruchamia `scripts/compose-smoke.sh`: rozprawa przez nginx do werdyktu, restart API i ponowny
-  odczyt dziennika z Postgresa.
+  `ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build`. Uwaga: compose czyta też
+  plik `.env` — jeśli jest w nim klucz i `TRYBUNAL_REHEARSAL=0`, rozprawy idą na prawdziwy model.
+- CI uruchamia `scripts/compose-smoke.sh` (zawsze w próbie generalnej, bez klucza): rozprawa przez nginx
+  do werdyktu przy dwóch instancjach API, restart API i ponowny odczyt dziennika z Postgresa.
 
 ## Uruchomienie
 

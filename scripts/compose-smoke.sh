@@ -23,7 +23,10 @@ wait_for() {
   return 1
 }
 
-TRYBUNAL_REHEARSAL_DELAY_MS=0 docker compose up --build --detach
+# Proba generalna wymuszona: docker compose czyta .env, a tam moze byc klucz i TRYBUNAL_REHEARSAL=0 —
+# test nie moze wydawac pieniedzy na prawdziwy model. Zmienne z powloki maja pierwszenstwo przed .env.
+# Przerwa 300 ms: strumien otwiera sie w trakcie rozprawy, wiec zdarzenia ida na zywo (miedzy instancjami).
+TRYBUNAL_REHEARSAL=1 ANTHROPIC_API_KEY= TRYBUNAL_REHEARSAL_DELAY_MS=300 docker compose up --build --detach
 wait_for "$web/api/health"
 page=$(curl -fsS "$web/")
 grep -q '<div id="root">' <<<"$page"
