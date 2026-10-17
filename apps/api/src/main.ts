@@ -2,11 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { AnthropicLlmClient } from "@trybunal/llm";
 import pg from "pg";
 import { buildApp } from "./app.js";
-import { LocalBus } from "./bus.js";
+import { LocalBus, type TrialBus } from "./bus.js";
 import { readConfig, toNanoUsd, withFileSecrets } from "./config.js";
 import { newKey, parseMasterKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
 import { Journal } from "./journal.js";
+import { PostgresBus } from "./pgbus.js";
 import { migrate, PostgresEventStore } from "./postgres.js";
 import { rehearsalLlm, slowRehearsalLlm } from "./rehearsal.js";
 import { startRetention } from "./retention.js";
@@ -40,7 +41,23 @@ const llm = config.TRYBUNAL_REHEARSAL || apiKey === undefined ? rehearsal : () =
 const hub = new TrialHub((error) => {
   console.error("Blad sluchacza strumienia:", error);
 });
-const bus = new LocalBus(hub);
+// Z baza: zdarzenia i anulowanie przez Postgres NOTIFY — kilka instancji API za jednym load balancerem.
+let pgBus: PostgresBus | undefined;
+let bus: TrialBus;
+if (pool === undefined) {
+  bus = new LocalBus(hub);
+} else {
+  pgBus = new PostgresBus({
+    pool,
+    journal,
+    hub,
+    onError: (error) => {
+      console.error("Blad magistrali rozpraw:", error);
+    },
+  });
+  await pgBus.start();
+  bus = pgBus;
+}
 const service = new TrialService({
   journal,
   bus,
@@ -84,6 +101,7 @@ const shutdown = async () => {
     stopRetention();
     await service.close();
     await app.close();
+    await pgBus?.close();
     await pool?.end();
   } catch (error) {
     console.error("Blad przy zamykaniu:", error);
