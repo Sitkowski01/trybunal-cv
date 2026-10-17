@@ -21,6 +21,12 @@ export interface CourtConfig {
   };
   /** Ile razy pytamy o to samo, zanim rozprawa zostanie przerwana. */
   readonly maxAttempts: number;
+  /**
+   * Krytycy oceniajacy bez ukrytego rozumowania. Pomiar 17.10: Bot ATS na Haiku 5.5 myslal przez ok.
+   * polowe wyjscia (1400 z 2900 tokenow), przekraczal limit 3000 i to dawalo ok. 60% ponowien w rozprawach.
+   * Bez myslenia ta sama ocena to ok. 1000 tokenow. Krytycy oceniajacy jakosc (Sonnet) mysla dalej.
+   */
+  readonly assessmentWithoutThinking: readonly CriticId[];
 }
 
 export const DEFAULT_CONFIG: CourtConfig = {
@@ -38,6 +44,7 @@ export const DEFAULT_CONFIG: CourtConfig = {
   },
   maxTokens: { assessment: 3000, prosecution: 1500, statement: 800, justification: 2000 },
   maxAttempts: 3,
+  assessmentWithoutThinking: ["ats"],
 };
 
 /**

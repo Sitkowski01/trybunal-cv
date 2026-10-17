@@ -105,6 +105,7 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
         instructions: prompts.instructionsFor(criticById(criticId)),
         task: prompts.assessmentTask,
         schema: AssessmentOutput,
+        ...(config.assessmentWithoutThinking.includes(criticId) ? { thinking: "off" as const } : {}),
       },
       (o) => findInventedQuotes({ ...o, criticId }, state.cvText).map((q) => `Cytat "${q}" nie wystepuje doslownie w CV`),
     );
