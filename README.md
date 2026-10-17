@@ -280,6 +280,21 @@ Ta sama trafność (każdy wariant pomylił się raz, w innym przypadku graniczn
 v3-scena zastąpiła v1. Raport rozbija też ponowienia według kroku i powodu: większość to Bot ATS na Haiku
 przerywany limitem tokenów — następny kandydat do poprawki.
 
+**v4 × 3 powtórzenia** ([raport](evals/results/claude-v4-x3/report.md)): zasada, że znaczniki anonimizacji
+(`[KANDYDAT]`) nie są wadą CV, i Bot ATS bez ukrytego rozumowania — surowa odpowiedź API pokazała, że Haiku 5.5
+myśli przez połowę wyjścia i stąd ucięcia.
+
+| Trafność (bez granicznych) | Zgodność powtórzeń | Rozrzut średniej przysięgłych | Koszt rozprawy | Przerwane |
+|---|---|---|---|---|
+| 91% (94%) | 98% | 0,10 | $0,24 | 3 z 60 |
+
+- **Stabilność wysoka:** przy powtórce sąd prawie zawsze mówi to samo.
+- **Wyłączenie myślenia u ATS — wycofane.** Ucięcia zniknęły, ale ATS bez myślenia 10 razy częściej
+  „cytował” zdania spoza CV, a 3 rozprawy przerwał brak poprawnej odpowiedzi — przy tym samym koszcie.
+  Zamiast tego ATS dostał większy limit oceny (6000 tokenów; na Haiku zapas kosztuje grosze).
+- `react-ats-akapity` 3 razy na 3 ze średnią dokładnie 6,0 — równo na progu zaproszenia (wcześniej 5,25–5,75).
+  Przypadek na granicy reguły, a nie błąd modelu; do rozważenia przy następnym przeglądzie progów.
+
 ## Demo bez serwera
 
 `pnpm --filter @trybunal/web build:demo` buduje frontend jako zwykłe pliki (`apps/web/dist-demo`), które
