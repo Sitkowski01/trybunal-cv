@@ -26,7 +26,8 @@ export const formatEnd = (reason: "finished" | "interrupted") => `event: end\nda
 export interface StreamDeps {
   readonly journal: Journal;
   readonly hub: TrialHub;
-  readonly isRunning: (trialId: string) => boolean;
+  /** Czy rozprawa trwa — w tej albo innej instancji API. */
+  readonly isRunning: (trialId: string) => Promise<boolean>;
   readonly heartbeatMs: number;
 }
 
@@ -39,19 +40,25 @@ export interface StreamDeps {
 export async function openStream(trialId: string, afterSeq: number, deps: StreamDeps) {
   const buffered: EventEnvelope[] = [];
   let deliver: ((e: EventEnvelope) => void) | null = null;
-  // Koniec rozprawy w trakcie odczytu z bazy wylapie sprawdzenie isRunning po nadrobieniu zaleglosci.
+  // Koniec rozprawy przed podlaczeniem klienta zapamietany: wylapie go sprawdzenie po nadrobieniu zaleglosci.
   let stopped: (() => void) | null = null;
+  let stoppedEarly = false;
   const unsubscribe = deps.hub.subscribe(
     trialId,
     (e) => {
       if (deliver === null) buffered.push(e);
       else deliver(e);
     },
-    () => stopped?.(),
+    () => {
+      if (stopped === null) stoppedEarly = true;
+      else stopped();
+    },
   );
   let stored: EventEnvelope[];
+  let running: boolean;
   try {
     stored = await deps.journal.read(trialId, afterSeq);
+    running = await deps.isRunning(trialId);
   } catch (error) {
     unsubscribe();
     throw error;
@@ -96,6 +103,6 @@ export async function openStream(trialId: string, afterSeq: number, deps: Stream
     stopped = () => {
       finish("interrupted");
     };
-    if (!progress.ended && !deps.isRunning(trialId)) finish("interrupted");
+    if (!progress.ended && (stoppedEarly || !running)) finish("interrupted");
   };
 }

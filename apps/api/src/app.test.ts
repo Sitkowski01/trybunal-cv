@@ -6,6 +6,7 @@ import { MAX_PDF_BYTES } from "@trybunal/domain";
 import { buildApp, redactIds } from "./app.js";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
+import { LocalBus } from "./bus.js";
 import { Journal } from "./journal.js";
 import { rehearsalLlm } from "./rehearsal.js";
 import { type ServiceOptions, TrialService } from "./service.js";
@@ -27,7 +28,7 @@ async function setup(overrides: Partial<ServiceOptions> = {}, rateLimitMax = 100
   const hub = new TrialHub();
   let ids = 0;
   const service = new TrialService({
-    journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3, newId: () => `t-${String(++ids)}`, ...overrides,
+    journal, bus: new LocalBus(hub), llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3, newId: () => `t-${String(++ids)}`, ...overrides,
   });
   const logStream = logs === undefined ? undefined : { write: (line: string) => { logs.push(line); } };
   app = await buildApp({ service, journal, hub, rateLimit: { max: rateLimitMax, timeWindowMs: 60_000 }, heartbeatMs: 20, ...(logStream === undefined ? {} : { logStream }) });
@@ -219,7 +220,7 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
   it("za proxy limit liczony per adres klienta z X-Forwarded-For", async () => {
     const journal = new Journal(new InMemoryEventStore(), newKey());
     const hub = new TrialHub();
-    const service = new TrialService({ journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3 });
+    const service = new TrialService({ journal, bus: new LocalBus(hub), llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3 });
     app = await buildApp({ service, journal, hub, rateLimit: { max: 1, timeWindowMs: 60_000 }, trustProxy: true });
     const post = (ip: string) => app?.inject({ method: "POST", url: "/trials", payload: body, headers: { "x-forwarded-for": ip } });
     expect((await post("10.0.0.1"))?.statusCode).toBe(202);

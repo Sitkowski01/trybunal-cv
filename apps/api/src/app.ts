@@ -86,7 +86,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     return {
       trialId: s.trialId,
       phase: s.phase,
-      running: service.isRunning(id),
+      running: await service.isActive(id),
       // Numery od 1 bez dziur (pilnuje dziennik), wiec ostatni numer = liczba zdarzen.
       lastSeq: envelopes.length,
       debateRounds: s.debateRounds,
@@ -104,14 +104,14 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     const query = request.query as { after?: unknown };
     // EventSource wznawia z naglowkiem Last-Event-ID; pierwsze polaczenie moze podac ?after=.
     const after = parse(AfterSeq, request.headers["last-event-id"] ?? query.after ?? 0);
-    const stream = await openStream(id, after, { journal, hub, isRunning: (t) => service.isRunning(t), heartbeatMs: options.heartbeatMs ?? 15_000 });
+    const stream = await openStream(id, after, { journal, hub, isRunning: (t) => service.isActive(t), heartbeatMs: options.heartbeatMs ?? 15_000 });
     reply.hijack();
     stream(request.raw, reply.raw);
   });
 
   app.post("/trials/:id/cancel", async (request, reply) => {
     const { id } = parse(TrialParams, request.params);
-    if (service.cancel(id)) return reply.code(202).send({ cancelled: true });
+    if (await service.cancel(id)) return reply.code(202).send({ cancelled: true });
     await journal.assertReadable(id);
     return reply.code(409).send({ error: "Rozprawa juz sie zakonczyla" });
   });

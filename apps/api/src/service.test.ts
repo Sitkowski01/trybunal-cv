@@ -3,6 +3,7 @@ import { FakeLlmClient, type LlmClient } from "@trybunal/llm";
 import { describe, expect, it } from "vitest";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
+import { LocalBus } from "./bus.js";
 import { type EventEnvelope, Journal } from "./journal.js";
 import { rehearsalLlm, rehearsalScript } from "./rehearsal.js";
 import { CourtBusyError, InvalidTrialError, type ServiceOptions, TrialService } from "./service.js";
@@ -27,7 +28,7 @@ function setup(overrides: Partial<ServiceOptions> = {}) {
   let ids = 0;
   const service = new TrialService({
     journal,
-    hub,
+    bus: new LocalBus(hub),
     llm: rehearsalLlm,
     trialBudgetNanoUsd: 1 * USD,
     dailyBudgetNanoUsd: 10 * USD,
@@ -118,7 +119,7 @@ describe("TrialService — wniesienie i przebieg", () => {
     const journal = new Journal(store, newKey());
     const hub = new TrialHub();
     hub.subscribe("t-1", () => { throw new Error("zerwany strumien"); });
-    const service = new TrialService({ journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: USD, dailyBudgetNanoUsd: 10 * USD, maxRunning: 1, newId: () => "t-1" });
+    const service = new TrialService({ journal, bus: new LocalBus(hub), llm: rehearsalLlm, trialBudgetNanoUsd: USD, dailyBudgetNanoUsd: 10 * USD, maxRunning: 1, newId: () => "t-1" });
     await service.file(request);
     await service.settled("t-1");
     expect((await journal.read("t-1")).at(-1)?.event.type).toBe("VerdictAnnounced");
@@ -149,7 +150,7 @@ describe("TrialService — limity", () => {
     expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled", "rejected"]);
     const rejected = results[2] as PromiseRejectedResult;
     expect(rejected.reason).toEqual(new CourtBusyError("Sad prowadzi juz 2 rozpraw — sprobuj za chwile", "concurrency"));
-    service.cancel("t-1");
+    await service.cancel("t-1");
     await service.settled("t-1");
     await expect(service.file(request)).resolves.toMatchObject({ trialId: "t-4" });
     await service.close();
@@ -193,10 +194,11 @@ describe("TrialService — anulowanie, zapomnienie, awarie", () => {
   it("cancel konczy rozprawe zdarzeniem przerwania; nieznana rozprawa -> false", async () => {
     const { service, journal } = setup({ llm: () => hanging });
     await service.file(request);
-    expect(service.cancel("t-1")).toBe(true);
+    expect(await service.cancel("t-1")).toBe(true);
     await service.settled("t-1");
     expect((await journal.read("t-1")).at(-1)?.event).toEqual({ type: "TrialAborted", reason: "Rozprawa anulowana" });
-    expect(service.cancel("t-1")).toBe(false);
+    expect(await service.cancel("t-1")).toBe(false);
+    expect(await service.cancel("brak")).toBe(false);
   });
 
   it("forget przerywa trwajaca rozprawe i usuwa klucz", async () => {

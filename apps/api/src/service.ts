@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { type CourtConfig, runTrial } from "@trybunal/court";
 import { MAX_CV_CHARS, MAX_JOB_OFFER_CHARS, TrialEventSchema } from "@trybunal/domain";
 import { BudgetedLlmClient, type LlmClient } from "@trybunal/llm";
-import type { TrialHub } from "./hub.js";
-import type { Journal } from "./journal.js";
+import type { TrialBus } from "./bus.js";
+import { HEARTBEAT_MS, type Journal } from "./journal.js";
 import { type Anonymized, anonymize } from "./pii.js";
 import { describeIssues } from "./issues.js";
 
@@ -43,7 +43,8 @@ export class CourtBusyError extends Error {
 
 export interface ServiceOptions {
   readonly journal: Journal;
-  readonly hub: TrialHub;
+  /** Zdarzenia do strumieni SSE i anulowanie — w tej instancji albo przez baze do innych. */
+  readonly bus: TrialBus;
   /** Zrodlo modelu dla nowej rozprawy (Claude, nagranie albo proba generalna). */
   readonly llm: () => LlmClient;
   readonly trialBudgetNanoUsd: number;
@@ -73,8 +74,18 @@ export class TrialService {
   /** Wniesienia miedzy sprawdzeniem limitow a startem — zajmuja miejsce, zeby dwa naraz nie przeszly obok limitu. */
   private filing = 0;
   private closing = false;
+  private readonly heartbeat: ReturnType<typeof setInterval>;
 
-  constructor(private readonly options: ServiceOptions) {}
+  constructor(private readonly options: ServiceOptions) {
+    // Prosba o anulowanie z innej instancji (albo tej samej) — dziala, jesli to my prowadzimy rozprawe.
+    options.bus.onCancel((trialId) => this.running.get(trialId)?.controller.abort());
+    // Puls: inne instancje (i ta po restarcie) odrozniaja trwajaca rozprawe od porzuconej.
+    this.heartbeat = setInterval(() => {
+      if (this.running.size === 0) return;
+      this.options.journal.touch([...this.running.keys()]).catch((error: unknown) => this.options.onError?.(error, "puls"));
+    }, HEARTBEAT_MS);
+    this.heartbeat.unref();
+  }
 
   async file(request: FileRequest): Promise<Filed> {
     if (this.closing) {
@@ -117,16 +128,29 @@ export class TrialService {
     return this.running.has(trialId);
   }
 
+  /** Czy rozprawa trwa — tu albo w innej instancji API (koniec zapisany w bazie). */
+  async isActive(trialId: string): Promise<boolean> {
+    return this.running.has(trialId) || (await this.options.journal.isActive(trialId));
+  }
+
   /** Obietnica konca rozprawy (zapisane wszystkie zdarzenia); od razu, gdy nie trwa. */
   settled(trialId: string): Promise<void> {
     return this.running.get(trialId)?.done ?? Promise.resolve();
   }
 
-  /** Anuluje rozprawe; konczy sie ona zdarzeniem TrialAborted. false, gdy nie trwa. */
-  cancel(trialId: string): boolean {
+  /**
+   * Anuluje rozprawe; konczy sie ona zdarzeniem TrialAborted. Rozprawa innej instancji dostaje
+   * prosbe przez magistrale. false, gdy nie trwa nigdzie.
+   */
+  async cancel(trialId: string): Promise<boolean> {
     const run = this.running.get(trialId);
-    run?.controller.abort();
-    return run !== undefined;
+    if (run !== undefined) {
+      run.controller.abort();
+      return true;
+    }
+    if (!(await this.options.journal.isActive(trialId))) return false;
+    this.options.bus.cancelRequested(trialId);
+    return true;
   }
 
   /** RODO: przerywa rozprawe, jesli trwa, i usuwa jej klucz. false, gdy rozprawy nie ma. */
@@ -135,6 +159,9 @@ export class TrialService {
     if (run !== undefined) {
       run.controller.abort();
       await run.done;
+    } else if (await this.options.journal.isActive(trialId)) {
+      // Prowadzi ja inna instancja: bez klucza kolejny zapis sie nie uda i rozprawa sie przerwie.
+      this.options.bus.cancelRequested(trialId);
     }
     return this.options.journal.forget(trialId);
   }
@@ -142,6 +169,7 @@ export class TrialService {
   /** Zamkniecie serwera: anuluje trwajace rozprawy i czeka, az zapisza przerwanie. */
   async close(): Promise<void> {
     this.closing = true;
+    clearInterval(this.heartbeat);
     const all = [...this.running.values()];
     all.forEach((r) => { r.controller.abort(); });
     await Promise.all(all.map((r) => r.done));
@@ -167,7 +195,7 @@ export class TrialService {
 
   /** Uruchamia rozprawe w tle; zwraca obietnice zapisu wniesienia (TrialFiled). */
   private start(input: { trialId: string; cvText: string; jobOffer: string; debateRounds: number }): Promise<void> {
-    const { journal, hub, onError } = this.options;
+    const { journal, bus, onError } = this.options;
     const controller = new AbortController();
     let seq = 0;
     let writes = Promise.resolve();
@@ -198,18 +226,20 @@ export class TrialService {
             return;
           }
           // Poza try: blad sluchacza (zerwany strumien) to nie awaria zapisu i nie przerywa rozprawy.
-          hub.publish(envelope);
+          bus.published(envelope);
         });
       },
     })
       .then(() => writes)
       // Stryker disable next-line all: runTrial nie odrzuca przy poprawnym wejsciu (sprawdzone w file) — to tylko ochrona procesu.
       .catch(/* v8 ignore next */ (error: unknown) => onError?.(error, input.trialId))
-      .finally(() => {
+      .finally(async () => {
         this.running.delete(input.trialId);
         if (lostNanoUsd > 0) onError?.(new Error(`Niezapisany koszt rozprawy po awarii zapisu: ${String(lostNanoUsd)} nano-USD`), input.trialId);
+        // Koniec w bazie, zanim strumienie dostana sygnal: inna instancja, ktora otwiera strumien, juz wie.
+        await journal.markEnded(input.trialId).catch((error: unknown) => onError?.(error, input.trialId));
         // Strumienie czekajace na koniec dostaja go nawet wtedy, gdy werdyktu ani przerwania nie udalo sie zapisac.
-        hub.stop(input.trialId);
+        bus.stopped(input.trialId);
       });
     this.running.set(input.trialId, { controller, done });
     // runTrial zglasza wniesienie synchronicznie, przed pierwszym await — jego zapis jest juz w kolejce.

@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
-import { type EventEnvelope, Journal } from "./journal.js";
+import { LocalBus } from "./bus.js";
+import { ALIVE_MS, type EventEnvelope, Journal } from "./journal.js";
 import { rehearsalLlm } from "./rehearsal.js";
 import { type ServiceOptions, TrialService } from "./service.js";
 import { formatEnd, formatEvent, openStream, publicEvent } from "./sse.js";
@@ -21,11 +22,11 @@ afterEach(async () => {
   app = undefined;
 });
 
-async function setup(overrides: Partial<ServiceOptions> = {}) {
-  const journal = new Journal(new InMemoryEventStore(), newKey());
+async function setup(overrides: Partial<ServiceOptions> = {}, now?: () => Date) {
+  const journal = new Journal(new InMemoryEventStore(), newKey(), now);
   const hub = new TrialHub();
   const service = new TrialService({
-    journal, hub, llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3, newId: () => "t-1", ...overrides,
+    journal, bus: new LocalBus(hub), llm: rehearsalLlm, trialBudgetNanoUsd: 1e9, dailyBudgetNanoUsd: 1e10, maxRunning: 3, newId: () => "t-1", ...overrides,
   });
   app = await buildApp({ service, journal, hub, rateLimit: { max: 100, timeWindowMs: 60_000 }, heartbeatMs: 20 });
   return { app, service, journal, hub };
@@ -94,9 +95,12 @@ describe("GET /trials/:id/events", () => {
   });
 
   it("rozprawa bez konca, ktora nie trwa (restart serwera): zapisane zdarzenia i koniec 'interrupted'", async () => {
-    const { app, journal } = await setup();
+    // Zalozona przez proces sprzed restartu: bez pulsu dluzej niz ALIVE_MS.
+    let offset = -ALIVE_MS - 1000;
+    const { app, journal } = await setup({}, () => new Date(Date.now() + offset));
     await journal.create("t-1");
     await journal.append("t-1", 1, { type: "TrialFiled", trialId: "t-1", ...body }, []);
+    offset = 0;
     expect(frames((await app.inject({ url: "/trials/t-1/events" })).body)).toEqual([1, formatEnd("interrupted").trim()]);
   });
 
@@ -107,7 +111,7 @@ describe("GET /trials/:id/events", () => {
     const stream = readUntil(`${address}/trials/t-1/events`, (t) => t.includes("event: end"));
     await expect.poll(() => hub.listenerCount("t-1")).toBe(1);
     await new Promise((r) => setTimeout(r, 50));
-    service.cancel("t-1");
+    await service.cancel("t-1");
     const { text } = await stream;
     expect(frames(text)).toEqual([1, 2, formatEnd("finished").trim()]);
     expect(text).toContain(": ping\n\n");
@@ -144,7 +148,7 @@ describe("openStream — szczelina miedzy odczytem a subskrypcja", () => {
         return Promise.resolve([env(2), env(3)]);
       },
     } as unknown as Journal;
-    const write = await openStream("t", 1, { journal, hub, isRunning: () => true, heartbeatMs: 1000 });
+    const write = await openStream("t", 1, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 1000 });
     const written: string[] = [];
     const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
     const request = { destroyed: false };
@@ -159,7 +163,7 @@ describe("openStream — szczelina miedzy odczytem a subskrypcja", () => {
   it("blad odczytu: wyjatek dla obslugi HTTP i bez wiszacej subskrypcji", async () => {
     const hub = new TrialHub();
     const journal = { read: () => Promise.reject(new Error("404")) } as unknown as Journal;
-    await expect(openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 1000 })).rejects.toThrow("404");
+    await expect(openStream("t", 0, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 1000 })).rejects.toThrow("404");
     expect(hub.listenerCount("t")).toBe(0);
   });
 });
@@ -179,7 +183,7 @@ describe("strumien — prywatnosc i koniec bez werdyktu", () => {
   it("rozprawa staje bez zapisanego konca -> strumien konczy sie 'interrupted', a nie wisi", async () => {
     const hub = new TrialHub();
     const journal = { read: () => Promise.resolve([]) } as unknown as Journal;
-    const write = await openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 1000 });
+    const write = await openStream("t", 0, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 1000 });
     const written: string[] = [];
     const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
     write({ destroyed: false } as never, response as never);
@@ -191,7 +195,7 @@ describe("strumien — prywatnosc i koniec bez werdyktu", () => {
   it("klient odszedl w trakcie odczytu z bazy: nic nie wysylamy i sprzatamy subskrypcje", async () => {
     const hub = new TrialHub();
     const journal = { read: () => Promise.resolve([]) } as unknown as Journal;
-    const write = await openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 1000 });
+    const write = await openStream("t", 0, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 1000 });
     const response = { destroyed: false, writeHead: () => { throw new Error("nie powinno pisac"); } };
     write({ destroyed: true } as never, response as never);
     expect(hub.listenerCount("t")).toBe(0);
@@ -204,7 +208,7 @@ describe("strumien — puls", () => {
     try {
       const hub = new TrialHub();
       const journal = { read: () => Promise.resolve([]) } as unknown as Journal;
-      const write = await openStream("t", 0, { journal, hub, isRunning: () => true, heartbeatMs: 100 });
+      const write = await openStream("t", 0, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 100 });
       const written: string[] = [];
       const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
       write({ destroyed: false } as never, response as never);

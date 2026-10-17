@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { AnthropicLlmClient } from "@trybunal/llm";
 import pg from "pg";
 import { buildApp } from "./app.js";
+import { LocalBus } from "./bus.js";
 import { readConfig, toNanoUsd, withFileSecrets } from "./config.js";
 import { newKey, parseMasterKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
@@ -39,9 +40,10 @@ const llm = config.TRYBUNAL_REHEARSAL || apiKey === undefined ? rehearsal : () =
 const hub = new TrialHub((error) => {
   console.error("Blad sluchacza strumienia:", error);
 });
+const bus = new LocalBus(hub);
 const service = new TrialService({
   journal,
-  hub,
+  bus,
   llm,
   trialBudgetNanoUsd: toNanoUsd(config.TRIAL_BUDGET_USD),
   dailyBudgetNanoUsd: toNanoUsd(config.DAILY_BUDGET_USD),
