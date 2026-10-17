@@ -1,5 +1,5 @@
 import { formatUsd } from "@trybunal/llm";
-import { caseDifferences, summarize, type VariantSummary, variantsOf } from "./metrics.js";
+import { caseDifferences, type MajorityVerdict, summarize, type VariantSummary, variantsOf } from "./metrics.js";
 import type { TrialOutcome } from "./outcome.js";
 
 /** Raport do repozytorium: tabela metryk wariantow, bledy wedlug tagow i roznice miedzy wariantami. */
@@ -8,6 +8,7 @@ const pct = (value: number | null) => (value === null ? "—" : `${(value * 100)
 const num = (value: number | null) => (value === null ? "—" : value.toFixed(2));
 const usd = (value: number) => formatUsd(Math.round(value));
 const list = (items: readonly string[]) => (items.length === 0 ? "—" : items.join(", "));
+const verdictLabel = (verdict: MajorityVerdict) => (verdict === "tie" ? "remis" : verdict);
 
 function row(cells: readonly string[]): string {
   return `| ${cells.join(" | ")} |`;
@@ -114,7 +115,8 @@ export function renderReport(meta: ReportMeta, outcomes: readonly TrialOutcome[]
     "## Przypadki do obejrzenia",
     "",
     ...summaries.flatMap((s) => [
-      `- **${s.variant}** — chybione (werdykt większości ≠ oczekiwany): ${list(s.missedCases)}; niestabilne: ${list(s.stability.flippingCases)}`,
+      `- **${s.variant}** — chybione (werdykt większości ≠ oczekiwany): ${list(s.missedCases)}; niestabilne: ${list(s.stability.flippingCases)}` +
+        (s.tiedCases.length === 0 ? "" : `; remis (do powtórzenia): ${list(s.tiedCases)}`),
     ]),
   ];
   const [base = "", ...candidates] = variants;
@@ -128,7 +130,7 @@ export function renderReport(meta: ReportMeta, outcomes: readonly TrialOutcome[]
         ? ["Brak — oba warianty ogłaszają te same werdykty większości."]
         : table(
             ["Przypadek", "Oczekiwany", base, candidate],
-            diffs.map((d) => [d.caseId, d.expected, d.base, d.candidate]),
+            diffs.map((d) => [d.caseId, d.expected, verdictLabel(d.base), verdictLabel(d.candidate)]),
           )),
     );
   }

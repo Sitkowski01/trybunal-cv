@@ -4,9 +4,10 @@ import { caseDifferences, majority, stdDev, summarize, variantsOf } from "./metr
 import { aborted, outcome } from "./test/fixtures.js";
 
 describe("majority", () => {
-  it("wiecej zaproszen -> invite; remis i przewaga odrzucen -> reject", () => {
+  it("wiecej zaproszen -> invite, wiecej odrzucen -> reject, po rowno -> remis", () => {
     expect(majority(["invite", "invite", "reject"])).toBe("invite");
-    expect(majority(["invite", "reject"])).toBe("reject");
+    expect(majority(["invite", "reject"])).toBe("tie");
+    expect(majority([])).toBe("tie");
     expect(majority(["reject", "reject", "invite"])).toBe("reject");
     expect(majority(["invite"])).toBe("invite");
   });
@@ -77,6 +78,19 @@ describe("summarize", () => {
       outcome({ caseId: "b", expected: "reject", decision: "reject" }),
     ]);
     expect(s.missedCases).toEqual(["a"]);
+    expect(s.tiedCases).toEqual([]);
+  });
+
+  it("remis powtorzen (np. 2 z 3 po przerwaniu): ani trafienie, ani pomylka; zgodnosc 50%", () => {
+    const s = summarize("v1", [
+      outcome({ caseId: "a", expected: "invite", decision: "reject" }),
+      outcome({ caseId: "a", expected: "invite", decision: "invite", repeat: 1 }),
+      aborted({ caseId: "a", expected: "invite", repeat: 2 }),
+      outcome({ caseId: "b", expected: "reject", decision: "invite" }),
+    ]);
+    expect(s.tiedCases).toEqual(["a"]);
+    expect(s.missedCases).toEqual(["b"]);
+    expect(s.stability.agreement).toBe(0.5);
   });
 
   it("koszt, cache i ponowienia licza tez przerwane rozprawy — za nie tez placimy", () => {

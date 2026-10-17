@@ -19,8 +19,10 @@ export interface VariantSummary {
   readonly confusion: Readonly<Record<Decision, Readonly<Record<Decision, number>>>>;
   readonly byTag: readonly TagAccuracy[];
   readonly stability: Stability;
-  /** Przypadki, w ktorych werdykt wiekszosci powtorzen rozni sie od oczekiwanego. */
+  /** Przypadki, w ktorych werdykt wiekszosci powtorzen rozni sie od oczekiwanego (remis to nie pomylka). */
   readonly missedCases: readonly string[];
+  /** Remis: tyle samo zaproszen co odrzucen — ani trafienie, ani pomylka; do powtorzenia. */
+  readonly tiedCases: readonly string[];
   readonly cost: Cost;
   /** Czesc tokenow wejscia odczytana z cache — czy wspolny poczatek promptu naprawde sie oplaca. */
   readonly cacheHitRatio: number | null;
@@ -68,9 +70,13 @@ export function stdDev(values: readonly number[]): number {
 }
 
 /** Werdykt wiekszosci; przy remisie "reject" — ostrozniej nie obiecywac zaproszenia. */
-export function majority(decisions: readonly Decision[]): Decision {
+/** Werdykt wiekszosci powtorzen; "tie" przy rownej liczbie zaproszen i odrzucen (np. 2 z 3 po przerwaniu). */
+export type MajorityVerdict = Decision | "tie";
+
+export function majority(decisions: readonly Decision[]): MajorityVerdict {
   const invites = decisions.filter((d) => d === "invite").length;
-  return invites > decisions.length - invites ? "invite" : "reject";
+  const rejects = decisions.length - invites;
+  return invites === rejects ? "tie" : invites > rejects ? "invite" : "reject";
 }
 
 type Completed = TrialOutcome & { readonly decision: Decision; readonly juryAverage: number };
@@ -92,8 +98,9 @@ function byCase(outcomes: readonly Completed[]): Map<string, Runs> {
 function stability(groups: ReadonlyMap<string, Runs>): Stability {
   const repeated = [...groups].filter(([, runs]) => runs.length >= 2);
   const agreements = repeated.map(([, runs]) => {
-    const winner = majority(runs.map((r) => r.decision));
-    return runs.filter((r) => r.decision === winner).length / runs.length;
+    // Zgodnosc z wiekszoscia; przy remisie polowa powtorzen zgadza sie z kazda strona.
+    const invites = runs.filter((r) => r.decision === "invite").length;
+    return Math.max(invites, runs.length - invites) / runs.length;
   });
   return {
     repeatedCases: repeated.length,
@@ -130,7 +137,13 @@ export function summarize(variant: string, all: readonly TrialOutcome[]): Varian
       return tagged.length === 0 ? [] : [{ tag, completed: tagged.length, correct: tagged.filter((o) => o.decision === o.expected).length }];
     }),
     stability: stability(groups),
-    missedCases: [...groups].filter(([, runs]) => majority(runs.map((r) => r.decision)) !== runs[0].expected).map(([id]) => id),
+    missedCases: [...groups]
+      .filter(([, runs]) => {
+        const verdict = majority(runs.map((r) => r.decision));
+        return verdict !== "tie" && verdict !== runs[0].expected;
+      })
+      .map(([id]) => id),
+    tiedCases: [...groups].filter(([, runs]) => majority(runs.map((r) => r.decision)) === "tie").map(([id]) => id),
     cost: {
       totalNanoUsd: sum((o) => o.costNanoUsd),
       meanPerTrialNanoUsd: mean(costs),
@@ -157,8 +170,8 @@ export function variantsOf(outcomes: readonly TrialOutcome[]): string[] {
 export interface CaseDifference {
   readonly caseId: string;
   readonly expected: Decision;
-  readonly base: Decision;
-  readonly candidate: Decision;
+  readonly base: MajorityVerdict;
+  readonly candidate: MajorityVerdict;
 }
 
 export function caseDifferences(outcomes: readonly TrialOutcome[], base: string, candidate: string): CaseDifference[] {

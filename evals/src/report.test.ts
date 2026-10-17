@@ -37,6 +37,16 @@ describe("renderReport", () => {
     expect(renderReport(meta, [outcome()])).not.toContain("Nieudane próby");
   });
 
+  it("remis w tabeli roznic opisany slowem, nie jako zaproszenie albo odrzucenie", () => {
+    const text = renderReport(meta, [
+      outcome({ caseId: "a", expected: "reject", decision: "invite" }),
+      outcome({ caseId: "a", expected: "reject", decision: "reject", repeat: 1 }),
+      outcome({ variant: "v2", caseId: "a", expected: "reject", decision: "reject" }),
+    ]);
+    expect(text).toContain("| a | reject | remis | reject |");
+    expect(text).toContain("remis (do powtórzenia): a");
+  });
+
   it("jeden wariant: bez sekcji roznic; brak danych jako kreska", () => {
     const text = renderReport(meta, [aborted({ costNanoUsd: 0, attempts: 0, inputTokens: 0 })]);
     expect(text).not.toContain("→");
