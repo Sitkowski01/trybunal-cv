@@ -91,6 +91,15 @@ describe("AnthropicLlmClient — zapytanie", () => {
     ]);
   });
 
+  it("myslenie: wylaczone tylko na zyczenie; domyslnie decyduje model (bez pola thinking)", async () => {
+    const { api, sent } = fakeApi();
+    const client = new AnthropicLlmClient(api);
+    await client.generate({ ...request, thinking: "off" });
+    await client.generate(request);
+    expect(sent[0]?.body.thinking).toEqual({ type: "disabled" });
+    expect(sent[1]?.body).not.toHaveProperty("thinking");
+  });
+
   it("prosi o odpowiedz w formacie JSON Schema zbudowanym ze schematu zod", async () => {
     const { api, sent } = fakeApi();
     await new AnthropicLlmClient(api).generate(request);
