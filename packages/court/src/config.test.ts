@@ -16,7 +16,10 @@ describe("DEFAULT_CONFIG", () => {
   });
 
   it("limity tokenow sa dodatnie, a prob wiecej niz jedna", () => {
-    expect(Object.values(DEFAULT_CONFIG.maxTokens).every((n) => n > 0)).toBe(true);
+    const { assessment: perCritic, ...phases } = DEFAULT_CONFIG.maxTokens;
+    expect([...Object.values(perCritic), ...Object.values(phases)].every((n) => n > 0)).toBe(true);
+    // Bot ATS mysli dluzej — wiekszy limit tylko dla niego.
+    expect(perCritic.ats).toBeGreaterThan(perCritic.hr);
     expect(DEFAULT_CONFIG.maxAttempts).toBeGreaterThan(1);
   });
 });

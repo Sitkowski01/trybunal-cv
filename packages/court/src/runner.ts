@@ -101,7 +101,7 @@ export async function runTrial(input: TrialInput, options: RunOptions): Promise<
       {
         label: `assessment:${criticId}`,
         model: config.models.assessment[criticId],
-        maxTokens: config.maxTokens.assessment,
+        maxTokens: config.maxTokens.assessment[criticId],
         instructions: prompts.instructionsFor(criticById(criticId)),
         task: prompts.assessmentTask,
         schema: AssessmentOutput,
