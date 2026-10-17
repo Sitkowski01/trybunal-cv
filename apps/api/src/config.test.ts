@@ -13,6 +13,7 @@ describe("readConfig", () => {
       MAX_RUNNING_TRIALS: 3,
       RATE_LIMIT_PER_HOUR: 5,
       TRUST_PROXY: false,
+      TRIAL_RETENTION_DAYS: 30,
     });
   });
 
@@ -33,6 +34,8 @@ describe("readConfig", () => {
     [{ ANTHROPIC_API_KEY: "sk", TRYBUNAL_REHEARSAL: "tak" }, "TRYBUNAL_REHEARSAL: "],
     [{ TRYBUNAL_REHEARSAL: "1", TRYBUNAL_REHEARSAL_DELAY_MS: "10001" }, "TRYBUNAL_REHEARSAL_DELAY_MS: "],
     [{ TRYBUNAL_REHEARSAL: "1", TRYBUNAL_REHEARSAL_DELAY_MS: "-1" }, "TRYBUNAL_REHEARSAL_DELAY_MS: "],
+    [{ TRYBUNAL_REHEARSAL: "1", TRIAL_RETENTION_DAYS: "0" }, "TRIAL_RETENTION_DAYS: "],
+    [{ TRYBUNAL_REHEARSAL: "1", TRIAL_RETENTION_DAYS: "3651" }, "TRIAL_RETENTION_DAYS: "],
   ])("bledna konfiguracja zatrzymuje start z nazwa zmiennej (%#)", (env, message) => {
     expect(() => readConfig(env)).toThrow(`Bledna konfiguracja serwera:\n  ${message}`);
   });

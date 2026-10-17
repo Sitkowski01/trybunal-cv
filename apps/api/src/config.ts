@@ -27,6 +27,8 @@ const EnvSchema = z
     RATE_LIMIT_PER_HOUR: z.coerce.number().int().positive().default(5),
     /** 1 za proxy (Docker, nginx): limit liczony per X-Forwarded-For, a nie per adres proxy. */
     TRUST_PROXY: flag.default(false),
+    /** Po tylu dniach klucz rozprawy znika jak przy „Zapomnij rozprawe” (tylko z baza; w pamieci i tak znika z procesem). */
+    TRIAL_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
   })
   .superRefine((env, ctx) => {
     if (env.DATABASE_URL !== undefined && env.TRYBUNAL_MASTER_KEY === undefined) {

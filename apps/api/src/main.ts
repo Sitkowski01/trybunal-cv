@@ -8,6 +8,7 @@ import { TrialHub } from "./hub.js";
 import { Journal } from "./journal.js";
 import { migrate, PostgresEventStore } from "./postgres.js";
 import { rehearsalLlm, slowRehearsalLlm } from "./rehearsal.js";
+import { startRetention } from "./retention.js";
 import { TrialService } from "./service.js";
 import { InMemoryEventStore } from "./store.js";
 
@@ -58,11 +59,27 @@ const app = await buildApp({
   trustProxy: config.TRUST_PROXY,
 });
 
+// Retencja kluczy tylko z baza: dziennik w pamieci i tak znika z procesem.
+const stopRetention =
+  pool === undefined
+    ? () => undefined
+    : startRetention({
+        expire: (days) => journal.expireOlderThan(days),
+        days: config.TRIAL_RETENTION_DAYS,
+        onExpired: (count) => {
+          app.log.info({ count }, "Retencja: usunieto klucze starych rozpraw");
+        },
+        onError: (error) => {
+          app.log.error({ err: error }, "Blad retencji kluczy");
+        },
+      });
+
 // Zamkniecie: najpierw rozprawy zapisuja przerwanie, potem serwer i baza.
 // Nowe wniesienia dostaja 503 od pierwszej chwili zamykania; po 10 s konczymy mimo wszystko.
 const shutdown = async () => {
   setTimeout(() => process.exit(1), 10_000).unref();
   try {
+    stopRetention();
     await service.close();
     await app.close();
     await pool?.end();
