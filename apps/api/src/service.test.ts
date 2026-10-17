@@ -1,10 +1,10 @@
 import { DEFAULT_CONFIG } from "@trybunal/court";
 import { FakeLlmClient, type LlmClient } from "@trybunal/llm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
 import { LocalBus } from "./bus.js";
-import { type EventEnvelope, Journal } from "./journal.js";
+import { type EventEnvelope, HEARTBEAT_MS, Journal } from "./journal.js";
 import { rehearsalLlm, rehearsalScript } from "./rehearsal.js";
 import { CourtBusyError, InvalidTrialError, type ServiceOptions, TrialService } from "./service.js";
 import { InMemoryEventStore } from "./store.js";
@@ -248,5 +248,101 @@ describe("TrialService — anulowanie, zapomnienie, awarie", () => {
       expect((await journal.read(id)).at(-1)?.event.type).toBe("TrialAborted");
     }
     await expect(service.file(request)).rejects.toEqual(new CourtBusyError("Serwer jest zamykany — sprobuj za chwile", "closing"));
+  });
+});
+
+/** Magistrala z zapisem — widac, co instancja wyslala innym (prosby o anulowanie, koniec). */
+function recordingBus(hub: TrialHub) {
+  const local = new LocalBus(hub);
+  const sent: string[] = [];
+  let cancel: (trialId: string) => void = () => undefined;
+  const bus = {
+    published: (e: EventEnvelope) => { local.published(e); },
+    stopped: (trialId: string) => { sent.push(`stop:${trialId}`); local.stopped(trialId); },
+    cancelRequested: (trialId: string) => { sent.push(`cancel:${trialId}`); },
+    onCancel: (handler: (trialId: string) => void) => { cancel = handler; },
+  };
+  return { bus, sent, deliverCancel: (trialId: string) => { cancel(trialId); } };
+}
+
+describe("TrialService — kilka instancji", () => {
+  it("rozprawa innej instancji (trwa wg dziennika): cancel i forget wysylaja prosbe przez magistrale", async () => {
+    const hub = new TrialHub();
+    const { bus, sent } = recordingBus(hub);
+    const { journal, service } = setup({ bus });
+    await journal.create("obca");
+    expect(await service.isActive("obca")).toBe(true);
+    expect(service.isRunning("obca")).toBe(false);
+    expect(await service.cancel("obca")).toBe(true);
+    expect(await service.forget("obca")).toBe(true);
+    expect(sent).toEqual(["cancel:obca", "cancel:obca"]);
+    // Zapomniana i zakonczona — nie trwa, nikt nie dostaje prosby.
+    await journal.markEnded("obca");
+    expect(await service.cancel("obca")).toBe(false);
+    expect(await service.forget("obca")).toBe(true);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("prosba o anulowanie z magistrali przerywa rozprawe tej instancji; obca rozprawa ignorowana", async () => {
+    const hub = new TrialHub();
+    const { bus, deliverCancel } = recordingBus(hub);
+    const { journal, service } = setup({ bus, llm: () => hanging });
+    await service.file(request);
+    deliverCancel("inna");
+    deliverCancel("t-1");
+    await service.settled("t-1");
+    expect((await journal.read("t-1")).at(-1)?.event).toEqual({ type: "TrialAborted", reason: "Rozprawa anulowana" });
+  });
+
+  it("koniec rozprawy: zapis w dzienniku, potem sygnal koniec dla strumieni", async () => {
+    const hub = new TrialHub();
+    const { bus, sent } = recordingBus(hub);
+    const { journal, service } = setup({ bus });
+    await service.file(request);
+    expect(await journal.isActive("t-1")).toBe(true);
+    await service.settled("t-1");
+    expect(await journal.isActive("t-1")).toBe(false);
+    expect(sent).toEqual(["stop:t-1"]);
+  });
+
+  it("nieudany zapis konca rozprawy trafia do bledow, a sygnal konca i tak wychodzi", async () => {
+    const hub = new TrialHub();
+    const { bus, sent } = recordingBus(hub);
+    const { journal, service, errors } = setup({ bus });
+    journal.markEnded = () => Promise.reject(new Error("baza padla"));
+    await service.file(request);
+    await service.settled("t-1");
+    expect(errors).toContainEqual(new Error("baza padla"));
+    expect(sent).toEqual(["stop:t-1"]);
+  });
+});
+
+describe("TrialService — puls", () => {
+  it("co HEARTBEAT_MS potwierdza trwajace rozprawy; bez rozpraw i po zamknieciu milczy", async () => {
+    vi.useFakeTimers();
+    try {
+      const labels: string[] = [];
+      const { journal, service } = setup({ llm: () => hanging, onError: (error, trialId) => labels.push(`${trialId}: ${(error as Error).message}`) });
+      const touched: string[][] = [];
+      journal.touch = (ids) => {
+        touched.push([...ids]);
+        return ids.includes("t-2") ? Promise.reject(new Error("puls padl")) : Promise.resolve();
+      };
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+      expect(touched).toEqual([]);
+      await service.file(request);
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+      expect(touched).toEqual([["t-1"]]);
+      await service.file(request);
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+      expect(touched.at(-1)).toEqual(["t-1", "t-2"]);
+      expect(labels).toContain("puls: puls padl");
+      await service.close();
+      const count = touched.length;
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS * 3);
+      expect(touched).toHaveLength(count);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

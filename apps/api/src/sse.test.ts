@@ -138,6 +138,29 @@ describe("openStream — szczelina miedzy odczytem a subskrypcja", () => {
     calls: [],
   });
 
+  it("koniec rozprawy miedzy sprawdzeniem 'trwa' a podlaczeniem klienta nie ginie — strumien sie konczy", async () => {
+    const hub = new TrialHub();
+    const journal = { read: () => Promise.resolve([env(1)]) } as unknown as Journal;
+    // Sprawdzenie widzi trwajaca rozprawe; zaraz potem (np. w innej instancji) rozprawa sie konczy.
+    const write = await openStream("t", 0, {
+      journal,
+      hub,
+      isRunning: () => {
+        queueMicrotask(() => {
+          hub.stop("t");
+        });
+        return Promise.resolve(true);
+      },
+      heartbeatMs: 1000,
+    });
+    await Promise.resolve();
+    const written: string[] = [];
+    const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
+    write({ destroyed: false } as never, response as never);
+    expect(frames(written.join(""))).toEqual([1, formatEnd("interrupted").trim()]);
+    expect(hub.listenerCount("t")).toBe(0);
+  });
+
   it("zdarzenia z czasu odczytu nie gina i nie dubluja sie; bufor przed zywymi", async () => {
     const hub = new TrialHub();
     // Odczyt z bazy trwa, a w tym czasie rozprawa zapisuje 3 i 4 (3 zdazylo jeszcze trafic do odczytu).
