@@ -1,7 +1,7 @@
-import { DEBATE_ASK, JUDGE_ASK, PROMPTS, PROSECUTION_ASK, PROSECUTOR_STANCE, type PromptSet } from "@trybunal/court";
+import { ANONYMIZATION_RULE, DEBATE_ASK, JUDGE_ASK, PROMPTS, PROSECUTION_ASK, PROSECUTOR_STANCE, type PromptSet } from "@trybunal/court";
 
 /**
- * Warianty promptow do porownania. PROMPTS to prompty, ktorych uzywa sad (obecnie v3-scena).
+ * Warianty promptow do porownania. PROMPTS to prompty, ktorych uzywa sad (obecnie v4).
  * Kandydat dostaje wlasna wersje i dopiero po wygranej ewaluacji zastepuje prompty w pakiecie court;
  * poprzednie wersje zostaja tu, zeby dalo sie odtworzyc i powtorzyc stare porownania.
  */
@@ -11,6 +11,15 @@ export function replaceEnding(text: string, ending: string, replacement: string)
   if (!text.endsWith(ending)) throw new Error(`Zadanie nie konczy sie poleceniem: ${ending}`);
   return text.slice(0, text.length - ending.length) + replacement;
 }
+
+/**
+ * v3-scena: v4 bez zasady o anonimizacji. Bot ATS obnizal ocene za znacznik [KANDYDAT] w naglowku CV.
+ */
+export const PROMPTS_V3: PromptSet = {
+  ...PROMPTS,
+  version: "v3-scena",
+  rules: PROMPTS.rules.replace(`${ANONYMIZATION_RULE}\n`, ""),
+};
 
 /**
  * v1: pierwsza wersja sadu. Merytorycznie dobra, ale jako pokaz nie dzialala: wypowiedzi po
@@ -24,7 +33,7 @@ export const V1_DEBATE_ASK =
 export const V1_JUDGE_ASK = "Napisz uzasadnienie werdyktu dla kandydata.";
 
 export const PROMPTS_V1: PromptSet = {
-  ...PROMPTS,
+  ...PROMPTS_V3,
   version: "v1",
   instructionsFor: (critic) => PROMPTS.instructionsFor(critic).replace(PROSECUTOR_STANCE, V1_PROSECUTOR_STANCE),
   prosecutionTask: (state) => replaceEnding(PROMPTS.prosecutionTask(state), PROSECUTION_ASK, V1_PROSECUTION_ASK),
@@ -55,7 +64,7 @@ export const PROMPTS_V2: PromptSet = {
   rules: PROMPTS_V1.rules.replace(SCALE_LINE, ANCHORS),
 };
 
-export const VARIANTS: readonly PromptSet[] = [PROMPTS_V1, PROMPTS_V2, PROMPTS];
+export const VARIANTS: readonly PromptSet[] = [PROMPTS_V1, PROMPTS_V2, PROMPTS_V3, PROMPTS];
 
 /** Domyslnie: prompty sadu. Nowy kandydat dopisuje sie tu obok nich. */
 export const DEFAULT_VARIANTS: readonly PromptSet[] = [PROMPTS];

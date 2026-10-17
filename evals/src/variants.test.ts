@@ -1,4 +1,4 @@
-import { DEBATE_ASK, JUDGE_ASK, PROMPTS, PROSECUTION_ASK, PROSECUTOR_STANCE } from "@trybunal/court";
+import { ANONYMIZATION_RULE, DEBATE_ASK, JUDGE_ASK, PROMPTS, PROSECUTION_ASK, PROSECUTOR_STANCE } from "@trybunal/court";
 import { CRITIC_IDS, type CriticId, criticById, pendingVerdict, replay, type TrialEvent } from "@trybunal/domain";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,6 +6,7 @@ import {
   DEFAULT_VARIANTS,
   PROMPTS_V1,
   PROMPTS_V2,
+  PROMPTS_V3,
   replaceEnding,
   SCALE_LINE,
   V1_DEBATE_ASK,
@@ -17,8 +18,8 @@ import {
 } from "./variants.js";
 
 describe("warianty promptow", () => {
-  it("v1 i v2 do odtworzenia wynikow, prompty sadu na koncu i domyslnie", () => {
-    expect(VARIANTS.map((v) => v.version)).toEqual(["v1", "v2-kotwice", "v3-scena"]);
+  it("v1, v2 i v3 do odtworzenia wynikow, prompty sadu na koncu i domyslnie", () => {
+    expect(VARIANTS.map((v) => v.version)).toEqual(["v1", "v2-kotwice", "v3-scena", "v4"]);
     expect(VARIANTS.at(-1)).toBe(PROMPTS);
     expect(DEFAULT_VARIANTS).toEqual([PROMPTS]);
   });
@@ -35,6 +36,14 @@ describe("warianty promptow", () => {
   it("kotwice opisuja kazdy przedzial skali, w tym prog zaproszenia 6", () => {
     for (const band of ["9–10", "7–8", "- 6:", "4–5", "1–3"]) expect(ANCHORS).toContain(band);
     expect(ANCHORS).toContain("Wyjątek: Bot ATS");
+  });
+
+  it("v3-scena to v4 bez zasady o anonimizacji; v1 i v2 tez bez niej", () => {
+    expect(PROMPTS.rules).toContain(ANONYMIZATION_RULE);
+    expect(PROMPTS_V3).toMatchObject({ version: "v3-scena", assessmentTask: PROMPTS.assessmentTask });
+    expect(PROMPTS_V3.rules).not.toContain("[KANDYDAT]");
+    expect(PROMPTS_V3.rules.split("\n")).toHaveLength(PROMPTS.rules.split("\n").length - ANONYMIZATION_RULE.split("\n").length);
+    for (const old of [PROMPTS_V1, PROMPTS_V2]) expect(old.rules).not.toContain("[KANDYDAT]");
   });
 
   it("wersje sa unikalne i da sie je znalezc po nazwie", () => {
@@ -58,7 +67,7 @@ describe("v1 odtworzone z promptow sadu", () => {
   const state = replay(events);
 
   it("podmienia tylko koncowe polecenia i postawe prokuratora; zasady i przebieg wspolne", () => {
-    expect(PROMPTS_V1).toMatchObject({ version: "v1", rules: PROMPTS.rules, assessmentTask: PROMPTS.assessmentTask, judgeInstructions: PROMPTS.judgeInstructions });
+    expect(PROMPTS_V1).toMatchObject({ version: "v1", rules: PROMPTS_V3.rules, assessmentTask: PROMPTS.assessmentTask, judgeInstructions: PROMPTS.judgeInstructions });
     expect(PROMPTS_V1.prosecutionTask(state)).toBe(PROMPTS.prosecutionTask(state).replace(PROSECUTION_ASK, V1_PROSECUTION_ASK));
     expect(PROMPTS_V1.debateTask(state, "hr")).toBe(PROMPTS.debateTask(state, "hr").replace(DEBATE_ASK, V1_DEBATE_ASK));
     const verdict = pendingVerdict(replay([...events, ...CRITIC_IDS.map((id): TrialEvent => ({ type: "StatementMade", round: 1, criticId: id, statement: "x", revisedScore: null }))]));
