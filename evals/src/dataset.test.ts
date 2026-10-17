@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { MAX_CV_CHARS, MAX_JOB_OFFER_CHARS } from "@trybunal/domain";
 import { describe, expect, it } from "vitest";
-import { EvalCaseSchema, loadDataset, ManifestSchema, TAGS } from "./dataset.js";
+import { datasetHash, type EvalCase, EvalCaseSchema, loadDataset, ManifestSchema, TAGS } from "./dataset.js";
 
 const entry = { id: "a-1", cv: "cvs/a-1.md", offer: "offers/o.md", expected: "invite", tags: ["mocne"], note: "bo tak" };
 
@@ -81,5 +81,20 @@ describe("zbior w repozytorium", () => {
     const cases = await load();
     expect(new Set(cases.flatMap((c) => c.tags))).toEqual(new Set(TAGS));
     expect(new Set(cases.map((c) => c.expected))).toEqual(new Set(["invite", "reject"]));
+  });
+});
+
+describe("datasetHash", () => {
+  const c = (id: string, cvText: string, over: Partial<EvalCase> = {}): EvalCase =>
+    ({ ...entry, id, cv: `cvs/${id}.md`, cvText, offerText: "Java", ...over }) as EvalCase;
+
+  it("zalezy od tresci CV i ofert, nie od kolejnosci ani etykiet", () => {
+    const base = datasetHash([c("a", "Java"), c("b", "SQL")]);
+    expect(base).toMatch(/^[0-9a-f]{64}$/u);
+    expect(datasetHash([c("b", "SQL"), c("a", "Java")])).toBe(base);
+    expect(datasetHash([c("a", "Java", { expected: "reject", tags: ["slabe"], note: "inna" }), c("b", "SQL")])).toBe(base);
+    expect(datasetHash([c("a", "Java!"), c("b", "SQL")])).not.toBe(base);
+    expect(datasetHash([c("a", "Java", { offerText: "Kotlin" }), c("b", "SQL")])).not.toBe(base);
+    expect(datasetHash([c("a", "Java")])).not.toBe(base);
   });
 });

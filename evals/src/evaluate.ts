@@ -2,6 +2,7 @@ import { posix } from "node:path";
 import { BudgetExceededError, BudgetedLlmClient, formatUsd, type LlmClient } from "@trybunal/llm";
 import { parseRunArgs, UsageError } from "./args.js";
 import { heuristicLlm } from "./heuristic.js";
+import { datasetHash } from "./dataset.js";
 import { type EvalsIo, readDataset, readOptional } from "./io.js";
 import { type Meta, MetaSchema, reportMeta } from "./meta.js";
 import { latestOutcomes, outcomeKey, parseOutcomes, relabel } from "./outcome.js";
@@ -15,6 +16,8 @@ import { jobKey, planJobs, runEvals } from "./run.js";
 export async function evaluate(argv: readonly string[], io: EvalsIo): Promise<number> {
   const args = parseRunArgs(argv);
   let cases = await readDataset(io, args.dataset);
+  // Odcisk calego zbioru, przed zawezeniem --cases: wznowienie z innym --cases to wciaz ten sam zbior.
+  const hash = datasetHash(cases);
   if (args.cases !== null) {
     const wanted = args.cases;
     const unknown = wanted.filter((id) => !cases.some((c) => c.id === id));
@@ -28,10 +31,21 @@ export async function evaluate(argv: readonly string[], io: EvalsIo): Promise<nu
   const savedMeta = await readOptional(io, metaPath);
   const meta: Meta =
     savedMeta === null
-      ? { llm: args.llm, repeats: args.repeats, debateRounds: args.debateRounds, startedAt: io.now().toISOString(), dataset: args.dataset, spentNanoUsd: 0 }
+      ? {
+          llm: args.llm,
+          repeats: args.repeats,
+          debateRounds: args.debateRounds,
+          startedAt: io.now().toISOString(),
+          dataset: args.dataset,
+          spentNanoUsd: 0,
+          datasetHash: hash,
+        }
       : MetaSchema.parse(JSON.parse(savedMeta));
   if (meta.llm !== args.llm || meta.debateRounds !== args.debateRounds) {
     throw new UsageError(`${args.out} zawiera przebieg z innymi parametrami (llm ${meta.llm}, rundy ${String(meta.debateRounds)}) — wybierz inny katalog`);
+  }
+  if (meta.datasetHash !== undefined && meta.datasetHash !== hash) {
+    throw new UsageError(`${args.out} zaczeto na innym zbiorze (zmienily sie CV albo oferty) — wyniki nie bylyby porownywalne, wybierz inny katalog`);
   }
   const previous = latestOutcomes(parseOutcomes((await readOptional(io, outcomesPath)) ?? ""));
   // Limit dotyczy calego katalogu: wznowienie dostaje tylko to, co zostalo.

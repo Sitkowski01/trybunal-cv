@@ -13,6 +13,11 @@ export const MetaSchema = z.strictObject({
   dataset: z.string().min(1),
   /** Wszystko, co zaplacono w tym katalogu, rowniez za rozprawy odrzucone przy przerwaniu. */
   spentNanoUsd: z.number().int().min(0),
+  /** Odcisk CV i ofert zbioru (datasetHash); brak w przebiegach sprzed tego pola. */
+  datasetHash: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/u)
+    .optional(),
 });
 export type Meta = z.infer<typeof MetaSchema>;
 

@@ -19,7 +19,15 @@ describe("evaluate — przebieg", () => {
     expect(outcomes).toHaveLength(8);
     expect(new Set(outcomes.map((o) => o.variant))).toEqual(new Set(["v1", "v2-kotwice"]));
     const spent = spentOf(files);
-    expect(JSON.parse(files.get("wyniki/r1/meta.json") ?? "")).toEqual({ llm: "anthropic", repeats: 2, debateRounds: 1, startedAt: "2026-10-16T10:00:00.000Z", dataset: "ds", spentNanoUsd: spent });
+    expect(JSON.parse(files.get("wyniki/r1/meta.json") ?? "")).toEqual({
+      llm: "anthropic",
+      repeats: 2,
+      debateRounds: 1,
+      startedAt: "2026-10-16T10:00:00.000Z",
+      dataset: "ds",
+      spentNanoUsd: spent,
+      datasetHash: expect.stringMatching(/^[0-9a-f]{64}$/u) as unknown,
+    });
     expect(spent).toBe(outcomes.reduce((sum, o) => sum + o.costNanoUsd, 0));
     const report = files.get("wyniki/r1/report.md") ?? "";
     expect(report).toContain("# Ewaluacja Trybunału CV — r1");
@@ -94,6 +102,22 @@ describe("evaluate — wznowienie, budzet i przerwania", () => {
     await evaluate([...RUN, "--repeats", "1", "--variants", "v1"], io);
     await expect(evaluate([...RUN, "--rounds", "2"], io)).rejects.toThrow("wyniki/r1 zawiera przebieg z innymi parametrami (llm anthropic, rundy 1) — wybierz inny katalog");
     await expect(evaluate([...RUN, "--llm", "heuristic"], io)).rejects.toThrow(UsageError);
+  });
+
+  it("wznowienie na zmienionym zbiorze (inne CV) to blad; zmiana --cases i przebieg sprzed odcisku przechodza", async () => {
+    const { io, files } = memoryIo();
+    await evaluate([...RUN, "--repeats", "1", "--variants", "v1", "--cases", "a"], io);
+    // Inny wycinek tego samego zbioru — ten sam odcisk.
+    expect(await evaluate([...RUN, "--repeats", "1", "--variants", "v1", "--cases", "b"], io)).toBe(0);
+    files.set("ds/cvs/b.md", "Lubię gotować i piec.");
+    await expect(evaluate([...RUN, "--repeats", "1", "--variants", "v1"], io)).rejects.toThrow(
+      "wyniki/r1 zaczeto na innym zbiorze (zmienily sie CV albo oferty) — wyniki nie bylyby porownywalne, wybierz inny katalog",
+    );
+    // Katalog sprzed odcisku (meta bez datasetHash) wznawia sie jak dawniej.
+    const meta = JSON.parse(files.get("wyniki/r1/meta.json") ?? "") as Record<string, unknown>;
+    delete meta.datasetHash;
+    files.set("wyniki/r1/meta.json", JSON.stringify(meta));
+    expect(await evaluate([...RUN, "--repeats", "1", "--variants", "v1"], io)).toBe(0);
   });
 
   it("wyczerpany budzet przebiegu: kod 1, raport bez wynikow i podpowiedz", async () => {

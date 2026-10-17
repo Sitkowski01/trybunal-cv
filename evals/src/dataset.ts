@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { posix } from "node:path";
 import { z } from "zod";
 
@@ -55,4 +56,14 @@ export async function loadDataset(dir: string, readText: (path: string) => Promi
       offerText: await readText(posix.join(dir, entry.offer)),
     })),
   );
+}
+
+/**
+ * Odcisk wejscia rozpraw: tresc CV i ofert kazdego przypadku (bez etykiet — poprawka oczekiwanego
+ * werdyktu czy tagu nie wymaga powtorki rozpraw). Zapisany w meta.json; wznowienie na zmienionym
+ * zbiorze mieszaloby wyniki dwoch roznych zbiorow.
+ */
+export function datasetHash(cases: readonly EvalCase[]): string {
+  const input = [...cases].sort((a, b) => a.id.localeCompare(b.id)).map((c) => [c.id, c.cvText, c.offerText]);
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
