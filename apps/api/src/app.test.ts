@@ -250,6 +250,8 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
     expect((await post("10.0.0.1"))?.statusCode).toBe(202);
     expect((await post("10.0.0.2"))?.statusCode).toBe(202);
     expect((await post("10.0.0.1"))?.statusCode).toBe(429);
+    // Wpis dopisany przez klienta przed adresem od proxy nic nie zmienia — liczy sie ostatni.
+    expect((await post("1.2.3.4, 10.0.0.1"))?.statusCode).toBe(429);
     await service.close();
   });
 

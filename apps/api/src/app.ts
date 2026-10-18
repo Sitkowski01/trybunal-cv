@@ -44,7 +44,9 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const { service, journal, hub } = options;
   const app = Fastify({
-    trustProxy: options.trustProxy ?? false,
+    // Jeden zaufany posrednik (nasz nginx): adres klienta to ostatni wpis X-Forwarded-For. Wczesniejsze
+    // wpisy dopisal klient i moglby nimi obejsc limit wniesien, gdyby API stalo za proxy, ktore dopisuje.
+    trustProxy: options.trustProxy === true ? (_address: string, hop: number) => hop === 0 : false,
     // Id rozprawy to jedyny klucz do jej odczytu i usuniecia — nie moze lezec w logach.
     logger: options.logStream !== undefined && {
       stream: options.logStream,
