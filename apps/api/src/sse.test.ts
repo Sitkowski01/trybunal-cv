@@ -235,13 +235,115 @@ describe("strumien — puls", () => {
       const written: string[] = [];
       const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c: string) => written.push(c) };
       write({ destroyed: false } as never, response as never);
-      vi.advanceTimersByTime(250);
+      await vi.advanceTimersByTimeAsync(250);
       expect(written).toEqual([": ping\n\n", ": ping\n\n"]);
       hub.stop("t");
-      vi.advanceTimersByTime(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       expect(written).toEqual([": ping\n\n", ": ping\n\n", formatEnd("interrupted")]);
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("strumien — zgubione powiadomienia i padnieta instancja", () => {
+  const env = (seq: number, terminal = false): EventEnvelope => ({
+    trialId: "t", seq, occurredAt: "2026-10-12T10:00:00.000Z", schemaVersion: 1,
+    event: terminal ? { type: "VerdictAnnounced", verdict: { decision: "invite", juryAverage: 7, atsScore: 7, spread: 1, ambiguous: false } } : { type: "StatementMade", round: 1, criticId: "hr", statement: "x", revisedScore: null },
+    calls: [],
+  } as EventEnvelope);
+  const fakeResponse = () => {
+    const written: string[] = [];
+    const ends: (string | undefined)[] = [];
+    const response = { destroyed: false, on: () => response, writeHead: () => response, write: (c: string) => written.push(c), end: (c?: string) => { ends.push(c); if (c !== undefined) written.push(c); } };
+    return { response, written, ends };
+  };
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("najpierw 'czy trwa', potem odczyt — werdykt zapisany w miedzyczasie nie konczy strumienia jako 'interrupted'", async () => {
+    const order: string[] = [];
+    const journal = { read: () => { order.push("read"); return Promise.resolve([env(1)]); } } as unknown as Journal;
+    await openStream("t", 0, { journal, hub: new TrialHub(), isRunning: () => { order.push("isRunning"); return Promise.resolve(true); }, heartbeatMs: 1000 });
+    expect(order).toEqual(["isRunning", "read"]);
+  });
+
+  it("dziura w numerach na zywo: brakujace doczytane z dziennika, po kolei i bez duplikatow", async () => {
+    const hub = new TrialHub();
+    const reads: number[] = [];
+    const journal = {
+      read: (_t: string, after: number) => {
+        reads.push(after);
+        return Promise.resolve(after === 0 ? [env(1)] : [env(2), env(3), env(4)]);
+      },
+    } as unknown as Journal;
+    const write = await openStream("t", 0, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 1000 });
+    const { response, written } = fakeResponse();
+    write({ destroyed: false } as never, response as never);
+    hub.publish(env(4)); // 2 i 3 zgubione
+    hub.publish(env(5)); // przychodzi w trakcie doczytywania — musi poczekac
+    await flush();
+    hub.publish(env(6, true));
+    expect(reads).toEqual([0, 1]);
+    expect(frames(written.join(""))).toEqual([1, 2, 3, 4, 5, 6, formatEnd("finished").trim()]);
+    expect(hub.listenerCount("t")).toBe(0);
+  });
+
+  it("koniec rozprawy w trakcie doczytywania czeka na nie — doczytany werdykt wygrywa z interrupted", async () => {
+    const hub = new TrialHub();
+    const journal = { read: (_t: string, after: number) => Promise.resolve(after === 0 ? [env(1)] : [env(2), env(3, true)]) } as unknown as Journal;
+    const write = await openStream("t", 0, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 1000 });
+    const { response, written } = fakeResponse();
+    write({ destroyed: false } as never, response as never);
+    hub.publish(env(3, true));
+    hub.stop("t");
+    await flush();
+    expect(frames(written.join(""))).toEqual([1, 2, 3, formatEnd("finished").trim()]);
+  });
+
+  it("instancja prowadzaca padla: przy pulsie strumien widzi, ze rozprawa nie trwa, i konczy sie", async () => {
+    vi.useFakeTimers();
+    try {
+      let running = true;
+      const journal = { read: () => Promise.resolve([]) } as unknown as Journal;
+      const write = await openStream("t", 0, { journal, hub: new TrialHub(), isRunning: () => Promise.resolve(running), heartbeatMs: 100 });
+      const { response, written } = fakeResponse();
+      write({ destroyed: false } as never, response as never);
+      await vi.advanceTimersByTimeAsync(150);
+      expect(written).toEqual([": ping\n\n"]);
+      running = false;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(written).toEqual([": ping\n\n", ": ping\n\n", formatEnd("interrupted")]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rozprawa skonczyla sie, a powiadomienie o werdykcie zginelo: puls doczytuje werdykt", async () => {
+    vi.useFakeTimers();
+    try {
+      let ended = false;
+      const journal = { read: () => Promise.resolve(ended ? [env(1, true)] : []) } as unknown as Journal;
+      const write = await openStream("t", 0, { journal, hub: new TrialHub(), isRunning: () => Promise.resolve(!ended), heartbeatMs: 100 });
+      const { response, written } = fakeResponse();
+      write({ destroyed: false } as never, response as never);
+      ended = true;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(frames(written.join(""))).toEqual([1, formatEnd("finished").trim()]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("blad bazy przy doczytywaniu: polaczenie zamkniete bez 'end', zeby przegladarka wznowila", async () => {
+    const hub = new TrialHub();
+    const journal = { read: (_t: string, after: number) => (after === 0 ? Promise.resolve([env(1)]) : Promise.reject(new Error("baza"))) } as unknown as Journal;
+    const write = await openStream("t", 0, { journal, hub, isRunning: () => Promise.resolve(true), heartbeatMs: 1000 });
+    const { response, written, ends } = fakeResponse();
+    write({ destroyed: false } as never, response as never);
+    hub.publish(env(3));
+    await flush();
+    expect(frames(written.join(""))).toEqual([1]);
+    expect(ends).toEqual([undefined]);
+    expect(hub.listenerCount("t")).toBe(0);
   });
 });

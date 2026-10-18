@@ -36,6 +36,12 @@ export interface StreamDeps {
  * Subskrypcja przed odczytem z bazy, a duplikaty odsiane po numerze — zadne zdarzenie nie
  * przepadnie w szczelinie miedzy odczytem a subskrypcja. Bledy odczytu (404, 410) rzucane
  * zanim cokolwiek zostanie wyslane, zeby trafily do zwyklej obslugi bledow HTTP.
+ * "Trwa" sprawdzane przed odczytem: rozprawa konczy sie zapisem werdyktu, a dopiero potem znacznika
+ * konca, wiec gdy juz nie trwa, odczyt widzi werdykt.
+ * Na zywo: zdarzenie z numerem wiekszym niz nastepny oznacza zgubione powiadomienie (np. LISTEN
+ * w trakcie ponownego laczenia) — brakujace doczytujemy z dziennika. Przy kazdym pulsie strumien
+ * sprawdza, czy rozprawa trwa: instancja, ktora ja prowadzila, mogla pasc bez slowa.
+ * Blad bazy w trakcie zamyka polaczenie bez "end" — przegladarka wznowi od Last-Event-ID.
  */
 export async function openStream(trialId: string, afterSeq: number, deps: StreamDeps) {
   const buffered: EventEnvelope[] = [];
@@ -57,8 +63,8 @@ export async function openStream(trialId: string, afterSeq: number, deps: Stream
   let stored: EventEnvelope[];
   let running: boolean;
   try {
-    stored = await deps.journal.read(trialId, afterSeq);
     running = await deps.isRunning(trialId);
+    stored = await deps.journal.read(trialId, afterSeq);
   } catch (error) {
     unsubscribe();
     throw error;
@@ -79,7 +85,29 @@ export async function openStream(trialId: string, afterSeq: number, deps: Stream
     });
     // Obiekt, a nie zmienne: stan zmieniaja wywolania zwrotne, czego analiza przeplywu TS nie widzi.
     const progress = { last: afterSeq, ended: false };
-    const heartbeat = setInterval(() => response.write(": ping\n\n"), deps.heartbeatMs);
+    // Kroki wymagajace bazy ida po kolei; zdarzenia na zywo czekaja za nimi, zeby nie wyprzedzic doczytanych.
+    let queue: Promise<void> | null = null;
+    const later = (step: () => void | Promise<void>) => {
+      const next = (queue ?? Promise.resolve()).then(step).catch(() => {
+        finish();
+        response.end();
+      });
+      queue = next;
+      void next.then(() => {
+        if (queue === next) queue = null;
+      });
+    };
+    const catchUp = async () => {
+      if (!progress.ended) (await deps.journal.read(trialId, progress.last)).forEach(send);
+    };
+    const heartbeat = setInterval(() => {
+      response.write(": ping\n\n");
+      later(async () => {
+        if (progress.ended || (await deps.isRunning(trialId))) return;
+        await catchUp();
+        finish("interrupted");
+      });
+    }, deps.heartbeatMs);
     const finish = (reason?: "finished" | "interrupted") => {
       if (progress.ended) return;
       progress.ended = true;
@@ -97,12 +125,25 @@ export async function openStream(trialId: string, afterSeq: number, deps: Stream
       response.write(formatEvent(e));
       if (TERMINAL.has(e.event.type)) finish("finished");
     };
-    stored.forEach(send);
-    buffered.forEach(send);
-    deliver = send;
-    stopped = () => {
-      finish("interrupted");
+    const live = (e: EventEnvelope) => {
+      if (queue !== null) {
+        later(() => { send(e); });
+      } else if (e.seq > progress.last + 1) {
+        later(async () => {
+          await catchUp();
+          send(e);
+        });
+      } else {
+        send(e);
+      }
     };
-    if (!progress.ended && (stoppedEarly || !running)) finish("interrupted");
+    stored.forEach(send);
+    buffered.forEach(live);
+    deliver = live;
+    stopped = () => {
+      if (queue === null) finish("interrupted");
+      else later(() => { finish("interrupted"); });
+    };
+    if (!progress.ended && (stoppedEarly || !running)) stopped();
   };
 }
