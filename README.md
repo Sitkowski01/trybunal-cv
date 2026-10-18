@@ -390,3 +390,7 @@ pnpm e2e        # build + Playwright: API w próbie generalnej i zbudowany front
 - Reguły architektury (dependency-cruiser): domena nie korzysta z IO ani z innych pakietów,
   frontend nie zna warstwy LLM, stan sali nie zna Reacta, kod produkcyjny nie zna ewaluacji, brak cykli.
 - Każdy commit ma maks. 200 linii zmian (hook `.githooks/pre-commit`).
+
+## Licencja
+
+MIT — [LICENSE](LICENSE).
