@@ -25,19 +25,28 @@ export interface PostgresBusOptions {
   readonly hub: TrialHub;
   /** Bledy w tle (zerwane polaczenie, zly komunikat) — do logow; magistrala dziala dalej. */
   readonly onError?: (error: unknown) => void;
+  /** Pierwsza przerwa przed ponownym LISTEN po zerwaniu polaczenia; kolejne dwa razy dluzsze, do 30 s. */
+  readonly reconnectMs?: number;
 }
+
+const MAX_RECONNECT_MS = 30_000;
 
 /**
  * Kilka instancji API na jednej bazie: kazda instancja wysyla NOTIFY i slucha LISTEN na tym samym
  * kanale — rowniez wlasnych komunikatow, wiec do strumieni SSE zdarzenie trafia zawsze ta sama droga.
  * Wysylanie i odbior ida po kolei (lancuch obietnic): strumien SSE pomija zdarzenia o numerze nie
  * wiekszym niz ostatni wyslany, wiec zamiana kolejnosci zgubilaby zdarzenie.
+ * Zerwane polaczenie LISTEN (restart bazy, failover) to blad w logach i ponowne laczenie w tle.
+ * Komunikaty z przerwy przepadaja: zdarzenia strumien SSE doczyta z dziennika (dziura w numerach
+ * albo puls), prosbe o anulowanie trzeba ponowic.
  */
 export class PostgresBus implements TrialBus {
   private sending: Promise<void> = Promise.resolve();
   private receiving: Promise<void> = Promise.resolve();
   private cancel: (trialId: string) => void = () => undefined;
   private listener: pg.PoolClient | null = null;
+  private closed = false;
+  private retry: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly options: PostgresBusOptions) {}
 
@@ -47,11 +56,45 @@ export class PostgresBus implements TrialBus {
     client.on("notification", (message) => {
       this.receiving = this.receiving.then(() => this.receive(message.payload)).catch((error: unknown) => this.options.onError?.(error));
     });
-    await client.query(`LISTEN ${CHANNEL}`);
+    // Bez sluchacza "error" zerwane polaczenie zabiloby proces jako nieobsluzony blad.
+    client.on("error", (error) => {
+      this.lost(client, error);
+    });
+    try {
+      await client.query(`LISTEN ${CHANNEL}`);
+    } catch (error) {
+      client.release(true);
+      throw error;
+    }
+    if (this.closed) {
+      client.release();
+      return;
+    }
     this.listener = client;
   }
 
+  private lost(client: pg.PoolClient, error: Error): void {
+    if (this.listener !== client) return;
+    this.listener = null;
+    this.options.onError?.(error);
+    client.release(error);
+    this.reconnect(this.options.reconnectMs ?? 1000);
+  }
+
+  private reconnect(delayMs: number): void {
+    if (this.closed) return;
+    this.retry = setTimeout(() => {
+      this.start().catch((error: unknown) => {
+        this.options.onError?.(error);
+        this.reconnect(Math.min(delayMs * 2, MAX_RECONNECT_MS));
+      });
+    }, delayMs);
+    this.retry.unref();
+  }
+
   async close(): Promise<void> {
+    this.closed = true;
+    clearTimeout(this.retry);
     const client = this.listener;
     this.listener = null;
     if (client === null) return;

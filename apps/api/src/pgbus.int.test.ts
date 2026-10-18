@@ -32,7 +32,7 @@ async function instance() {
   const journal = new Journal(new PostgresEventStore(pool), masterKey);
   const hub = new TrialHub();
   const errors: unknown[] = [];
-  const bus = new PostgresBus({ pool, journal, hub, onError: (e) => errors.push(e) });
+  const bus = new PostgresBus({ pool, journal, hub, onError: (e) => errors.push(e), reconnectMs: 50 });
   await bus.start();
   return { pool, journal, hub, bus, errors };
 }
@@ -99,6 +99,22 @@ describe("PostgresBus — kilka instancji", () => {
     a.bus.published(await a.journal.append("t-3", 2, speech, []));
     await expect.poll(() => heard).toEqual([2]);
     expect(reads).toBe(1);
+    await Promise.all([a.bus.close(), b.bus.close()]);
+  });
+
+  it("zerwane polaczenie LISTEN (restart bazy): blad w logach, ponowne laczenie, magistrala dziala dalej", async () => {
+    const a = await instance();
+    const b = await instance();
+    const listening = () => a.pool.query<{ pid: number }>("SELECT pid FROM pg_stat_activity WHERE query = $1", [`LISTEN ${CHANNEL}`]);
+    const before = (await listening()).rows.map((r) => r.pid);
+    // Zabijamy polaczenia nasluchujace obu instancji — tak jak restart Postgresa.
+    await a.pool.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query = $1", [`LISTEN ${CHANNEL}`]);
+    await expect.poll(() => b.errors.length).toBeGreaterThan(0);
+    await expect.poll(async () => (await listening()).rows.filter((r) => !before.includes(r.pid)).length, { timeout: 5000 }).toBeGreaterThanOrEqual(2);
+    const cancelled: string[] = [];
+    b.bus.onCancel((trialId) => cancelled.push(trialId));
+    a.bus.cancelRequested("t-6");
+    await expect.poll(() => cancelled).toEqual(["t-6"]);
     await Promise.all([a.bus.close(), b.bus.close()]);
   });
 
