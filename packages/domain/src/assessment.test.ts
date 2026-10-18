@@ -120,15 +120,27 @@ describe("findInventedQuotes", () => {
     expect(findInventedQuotes(quoting("odpowiedzialny za wdrozenie"), pdf)).toEqual([]);
   });
 
-  it("sigma na koncu slowa i sama w cytacie to ta sama litera (kontrprzyklad z fast-check)", () => {
-    // Matematyczne "A" i "Σ": NFKC daje "AΣ", a toLowerCase zamienia koncowa sigme na "ς", samotna na "σ".
-    const cv = `${char(0x1d400)}${char(0x1d6f4)} `;
-    expect(findInventedQuotes(quoting(char(0x1d6f4)), cv)).toEqual([]);
+  it("sigma koncowa w cytacie i ta sama sigma w srodku tekstu CV to ta sama litera", () => {
+    // Matematyczne "A" i "Σ". toLowerCase daje "ς" na koncu slowa, a "σ", gdy za apostrofem idzie litera.
+    const cv = `${char(0x1d400)}${char(0x1d6f4)}'B`;
+    expect(findInventedQuotes(quoting(`${char(0x1d400)}${char(0x1d6f4)}`), cv)).toEqual([]);
   });
 
-  it("sasiednie znaki, ktore normalizacja moglaby zlozyc, zostaja osobno (kontrprzyklad z fast-check)", () => {
-    // Koreanskie litery w zgodnosciowej postaci: NFKC zlozyloby je w jedna sylabe.
-    expect(findInventedQuotes(quoting(char(0x314f)), `${char(0x3141)}${char(0x314f)} `)).toEqual([]);
+  it("fragment slowa nie jest cytatem: Java z JavaScript, 5 lat z 15 lat", () => {
+    const cv = "JavaScript, React. 15 lat (w tym Java) i Spring-Boot";
+    expect(findInventedQuotes(quoting("Java", "Script", "5 lat", "ava"), "JavaScript i 15 lat")).toEqual(["Java", "Script", "5 lat", "ava"]);
+    expect(findInventedQuotes(quoting("Java", "15 lat", "(w tym Java)", "Spring", "Boot", "React."), cv)).toEqual([]);
+    // Litery w zgodnosciowej postaci (kontrprzyklad z fast-check): po normalizacji to wciaz srodek slowa.
+    expect(findInventedQuotes(quoting(char(0x314f)), `${char(0x3141)}${char(0x314f)} `)).toEqual([char(0x314f)]);
+  });
+
+  it("slowo przeniesione do nastepnej linii w PDF pasuje do calego slowa; zwykly lacznik zostaje", () => {
+    const pdf = "Odpowiadalem za wdro-\nzenie i wdro\u2010  \r\n  zenia, flaga bialo-\nczerwona";
+    expect(findInventedQuotes(quoting("za wdrozenie", "wdrozenia", "bialo-czerwona"), pdf)).toEqual([]);
+    const nfd = "zarzą-\ndzanie".normalize("NFD");
+    expect(findInventedQuotes(quoting("zarządzanie"), nfd)).toEqual([]);
+    // Lacznik bez konca linii to zwykly lacznik, a konca linii po cyfrze nie sklejamy.
+    expect(findInventedQuotes(quoting("wdrozenie", "2020"), "wdro- zenie 20-\n20")).toEqual(["wdrozenie", "2020"]);
   });
 
   it("cytat bez polskich znakow pasuje do CV z nimi, ale l to nie l z kreska", () => {
@@ -157,17 +169,29 @@ describe("findInventedQuotes", () => {
     expect(findInventedQuotes(invented, cv)).toEqual(["10 lat w Google", "Kierowalem zespolem"]);
   });
 
-  it("cytat bedacy fragmentem CV zawsze jest uznany, takze poza ASCII", () => {
-    // Model cytuje cale znaki, wiec tniemy po grafemach, nie po jednostkach UTF-16.
-    const segmenter = new Intl.Segmenter("pl", { granularity: "grapheme" });
+  it("cytat z calych slow CV zawsze jest uznany, takze poza ASCII", () => {
+    // Slowa z dowolnych grafemow (model cytuje cale znaki), miedzy nimi zwykle separatory.
+    const separator = fc.constantFrom(" ", "\n", ", ", ". ", " - ", "\t");
     fc.assert(
-      fc.property(fc.string({ minLength: 1, unit: "grapheme" }), fc.nat(), fc.nat(), (text, a, b) => {
-        const graphemes = [...segmenter.segment(text)].map((s) => s.segment);
-        const start = a % graphemes.length;
-        const quote = graphemes.slice(start, start + 1 + (b % (graphemes.length - start))).join("");
+      fc.property(fc.array(fc.tuple(fc.string({ minLength: 1, unit: "grapheme" }), separator), { minLength: 1 }), fc.nat(), fc.nat(), (parts, a, b) => {
+        const text = parts.map(([word, sep]) => word + sep).join("");
+        const start = a % parts.length;
+        const words = parts.slice(start, start + 1 + (b % (parts.length - start)));
+        const quote = words.map(([word, sep], i) => (i === words.length - 1 ? word : word + sep)).join("");
         fc.pre(quote.trim().length > 0);
         const assessment = { ...valid, concerns: [{ quote, issue: "x", severity: "low" as const }], rewrites: [] };
         return findInventedQuotes(assessment, text).length === 0;
+      }),
+    );
+  });
+
+  it("slowo przeniesione w dowolnym miejscu pasuje do calego slowa", () => {
+    const letter = fc.constantFrom(...Array.from("abcąćęłńóśźżXYZĄŻ"));
+    fc.assert(
+      fc.property(fc.string({ minLength: 2, maxLength: 15, unit: letter }), fc.nat(), (word, k) => {
+        const cut = 1 + (k % (word.length - 1));
+        const pdf = `CV: ${word.slice(0, cut)}-\n${word.slice(cut)} koniec`;
+        return findInventedQuotes({ ...valid, concerns: [{ quote: word, issue: "x", severity: "low" }], rewrites: [] }, pdf).length === 0;
       }),
     );
   });

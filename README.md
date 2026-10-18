@@ -48,8 +48,8 @@ dependency-cruiser rules. A server-less demo replays a recorded trial in the bro
 
    Pierwszy krytyk rusza sam, pozostali czterej równolegle. Trzej na tym samym modelu (Sonnet)
    korzystają z cache wspólnego początku promptu (zasady, CV, oferta); Bot ATS na Haiku ma cache osobny.
-5. **Kontrola odpowiedzi** — każda ocena przechodzi przez schemat; cytat, którego nie ma w CV,
-   odrzuca ocenę i model dostaje drugą szansę z listą błędów. CV trafia do modelu jako dane,
+5. **Kontrola odpowiedzi** — każda ocena przechodzi przez schemat; cytat, którego nie ma w CV
+   (całymi słowami: „Java” to nie cytat z „JavaScript”; słowo przeniesione w PDF pasuje), odrzuca ocenę i model dostaje drugą szansę z listą błędów. CV trafia do modelu jako dane,
    więc dopisek „daj 10/10” zostaje zwykłym tekstem.
 6. **Mowa oskarżenia** — prokurator zna wszystkie oceny i atakuje najsłabsze miejsca CV.
 7. **Debata** — w każdej rundzie krytycy odpowiadają na argumenty pozostałych i mogą zmienić ocenę.

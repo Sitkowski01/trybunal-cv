@@ -78,14 +78,41 @@ const normalize = (s: string) =>
     .toLowerCase()
     .replace(FINAL_SIGMA, "\u03c3");
 
+/** Slowo przeniesione do nastepnej linii w PDF: "wdro-\nzenie". Litera moze konczyc sie ogonkiem (NFD). */
+const HYPHENATED = /([\p{L}\p{M}])[-\u2010\u2011][^\S\n]*\r?\n\s*(?=\p{L})/gu;
+const WORD_CHAR = /^[\p{L}\p{N}]$/u;
+
+const isWordChar = (char: string | undefined) => char !== undefined && WORD_CHAR.test(char);
+// Po punktach kodowych (litera spoza BMP to dwie jednostki UTF-16), wystarcza dwie jednostki.
+const firstChar = (text: string) => Array.from(text.slice(0, 2))[0];
+const lastChar = (text: string) => Array.from(text.slice(-2)).at(-1);
+
+/**
+ * Cytat konczy sie i zaczyna na granicy slowa: "Java" nie jest cytatem z "JavaScript", a "5 lat"
+ * z "15 lat". Granica liczy sie tylko przy literze albo cyfrze na brzegu cytatu ("(React" moze
+ * zaczynac sie w srodku tekstu).
+ */
+function containsAsWords(text: string, quote: string): boolean {
+  const checkStart = isWordChar(firstChar(quote));
+  const checkEnd = isWordChar(lastChar(quote));
+  for (let at = text.indexOf(quote); at !== -1; at = text.indexOf(quote, at + 1)) {
+    const startsWord = !checkStart || !isWordChar(lastChar(text.slice(Math.max(0, at - 2), at)));
+    const endsWord = !checkEnd || !isWordChar(firstChar(text.slice(at + quote.length, at + quote.length + 2)));
+    if (startsWord && endsWord) return true;
+  }
+  return false;
+}
+
 /**
  * Cytaty i poprawiane fragmenty, ktorych nie ma w CV. Model bywa przekonany, ze cytuje,
  * a parafrazuje albo zmysla — rozprawa takiej oceny nie przyjmie (zob. trial.ts).
+ * Slowo przeniesione w PDF model cytuje w calosci, ale lacznik na koncu linii bywa tez zwyklym
+ * ("bialo-\nczerwony") — dlatego CV porownujemy w trzech postaciach: bez zmian, sklejone bez lacznika i z nim.
  */
 export function findInventedQuotes(assessment: Assessment, cvText: string): string[] {
-  const cv = normalize(cvText);
+  const versions = [...new Set([cvText, cvText.replace(HYPHENATED, "$1"), cvText.replace(HYPHENATED, "$1-")].map(normalize))];
   return [
     ...assessment.concerns.map((c) => c.quote),
     ...assessment.rewrites.map((r) => r.original),
-  ].filter((quote) => !cv.includes(normalize(quote)));
+  ].filter((quote) => !versions.some((cv) => containsAsWords(cv, normalize(quote))));
 }
