@@ -169,6 +169,8 @@ Test na prawdziwym API uruchamia się tylko z kluczem:
   każdej instancji, więc przy dwóch instancjach limity są dwa razy większe; wspólny licznik wymagałby
   tabeli w Postgresie albo Redisa. Budżet dnia liczy wspólne wydatki z dziennika, ale rezerwuje pełny
   budżet tylko trwających rozpraw swojej instancji — druga może go przekroczyć o budżety swoich.
+- **PDF w osobnym wątku** z limitem 10 s i 256 MB pamięci: spreparowany plik (pętla w strukturze,
+  tysiące obiektów) nie zajmie procesora serwera i nie zatrzyma strumieni innych rozpraw.
 - **CSRF.** Zapytania zmieniające stan z nagłówkiem `Sec-Fetch-Site: cross-site` (albo `same-site`)
   dostają 403 — obca strona nie wniesie sprawy z przeglądarki odwiedzającego na koszt sądu.
 - **Próba generalna** (`TRYBUNAL_REHEARSAL=1`): cała rozprawa bez modelu i bez klucza;

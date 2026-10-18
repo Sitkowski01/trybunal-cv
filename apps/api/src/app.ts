@@ -6,7 +6,7 @@ import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { z } from "zod";
 import type { TrialHub } from "./hub.js";
 import { type Journal, TrialForgottenError, TrialNotFoundError } from "./journal.js";
-import { pdfToText, UnreadablePdfError } from "./pdf.js";
+import { readPdfIsolated, UnreadablePdfError } from "./pdf.js";
 import { CourtBusyError, type FileRequest, InvalidTrialError, type TrialService } from "./service.js";
 import { describeIssues } from "./issues.js";
 import { openStream } from "./sse.js";
@@ -146,7 +146,7 @@ async function readMultipart(parts: AsyncIterableIterator<import("@fastify/multi
       if (part.fieldname !== "cv") throw new InvalidTrialError([`${part.fieldname}: nieoczekiwany plik, CV wysylamy w polu "cv"`]);
       const bytes = await part.toBuffer();
       if ("cvText" in fields) throw new InvalidTrialError(["cv: CV jako plik albo tekst, nie oba naraz"]);
-      fields.cvText = await pdfToText(new Uint8Array(bytes));
+      fields.cvText = await readPdfIsolated(new Uint8Array(bytes));
     } else {
       if (part.fieldname === "cvText" && "cvText" in fields) throw new InvalidTrialError(["cv: CV jako plik albo tekst, nie oba naraz"]);
       fields[part.fieldname] = part.value;

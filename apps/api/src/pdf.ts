@@ -1,4 +1,6 @@
+import { Worker } from "node:worker_threads";
 import { extractText, getDocumentProxy } from "unpdf";
+import type { PdfWorkerReply } from "./pdf-worker.ts";
 
 /** Plik nie nadaje sie na CV: to nie PDF, jest zaszyfrowany albo nie ma warstwy tekstowej (skan). */
 export class UnreadablePdfError extends Error {
@@ -39,4 +41,49 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
     throw new UnreadablePdfError("PDF nie ma warstwy tekstowej (skan?) — wklej tresc CV jako tekst");
   }
   return text;
+}
+
+export interface IsolatedPdfOptions {
+  /** Po tylu ms watek jest zabijany, a plik odrzucony. */
+  readonly timeoutMs?: number;
+  /** Plik watku — w testach podmieniany na taki, ktory nie odpowiada albo pada. */
+  readonly workerUrl?: URL;
+}
+
+/** Limit pamieci watku: CV do 2 MB nie potrzebuje wiecej, a "bomba" w PDF nie zje pamieci serwera. */
+const WORKER_HEAP_MB = 256;
+
+const defaultWorkerUrl = () => new URL(import.meta.url.endsWith(".ts") ? "./pdf-worker.ts" : "./pdf-worker.js", import.meta.url);
+
+/**
+ * pdfToText w osobnym watku z limitem czasu i pamieci. Spreparowany PDF (petla w strukturze,
+ * tysiace obiektow) zajalby w glownym watku procesor serwera i zatrzymal strumienie wszystkich rozpraw.
+ */
+export async function readPdfIsolated(bytes: Uint8Array, options: IsolatedPdfOptions = {}): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  // execArgv: []: watek nie dziedziczy flag procesu (np. --input-type), ktore moglyby go zepsuc.
+  const worker = new Worker(options.workerUrl ?? defaultWorkerUrl(), { execArgv: [], resourceLimits: { maxOldGenerationSizeMb: WORKER_HEAP_MB } });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new UnreadablePdfError(`PDF czyta sie dluzej niz ${String(timeoutMs / 1000)} s — wklej tresc CV jako tekst`));
+      }, timeoutMs);
+      worker.once("message", (reply: PdfWorkerReply) => {
+        if (reply.ok) resolve(reply.text);
+        else reject(reply.readable ? new UnreadablePdfError(reply.message) : new Error(reply.message));
+      });
+      // Pad watku, np. przekroczony limit pamieci.
+      worker.once("error", (error: Error) => {
+        reject(new UnreadablePdfError(`Nie mozna odczytac PDF: ${error.message}`));
+      });
+      worker.once("exit", () => {
+        reject(new UnreadablePdfError("Nie mozna odczytac PDF: watek zakonczyl sie bez odpowiedzi"));
+      });
+      worker.postMessage(new Uint8Array(bytes));
+    });
+  } finally {
+    clearTimeout(timer);
+    await worker.terminate();
+  }
 }

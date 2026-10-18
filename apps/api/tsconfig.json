@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    // Watek PDF importuje "./pdf.ts", zeby dzialal tez wprost ze zrodel; w dist import idzie na .js.
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src"]
 }

@@ -5,7 +5,7 @@
   "vitest": { "configFile": "vitest.mutation.config.ts" },
   "checkers": ["typescript"],
   "tsconfigFile": "tsconfig.json",
-  "mutate": ["src/**/*.ts", "!src/**/*.test.ts", "!src/**/*.contract.ts", "!src/index.ts", "!src/main.ts", "!src/postgres.ts", "!src/pgbus.ts"],
+  "mutate": ["src/**/*.ts", "!src/**/*.test.ts", "!src/**/*.contract.ts", "!src/index.ts", "!src/main.ts", "!src/postgres.ts", "!src/pgbus.ts", "!src/pdf-worker.ts"],
   "reporters": ["clear-text", "progress", "html"],
   "htmlReporter": { "fileName": "reports/mutation/index.html" },
   "thresholds": { "high": 95, "low": 90, "break": 90 }
