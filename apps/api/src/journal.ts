@@ -120,10 +120,10 @@ export class Journal {
   private async key(trialId: string): Promise<Buffer> {
     const wrapped = await this.store.wrappedKey(trialId);
     if (wrapped === undefined) {
-      throw new TrialNotFoundError(`Nie ma rozprawy ${trialId}`);
+      throw new TrialNotFoundError("Nie ma takiej rozprawy");
     }
     if (wrapped === null) {
-      throw new TrialForgottenError(`Rozprawa ${trialId} zostala zapomniana na zadanie kandydata`);
+      throw new TrialForgottenError("Rozprawa zostala zapomniana na zadanie kandydata");
     }
     return open(this.masterKey, wrapped, `key:${trialId}`);
   }

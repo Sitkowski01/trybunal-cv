@@ -45,13 +45,13 @@ describe("Journal", () => {
     await journal.append("t-1", 1, filed, []);
     expect(await journal.forget("t-1")).toBe(true);
     await expect(journal.read("t-1")).rejects.toBeInstanceOf(TrialForgottenError);
-    await expect(journal.append("t-1", 2, speech, [])).rejects.toThrow("Rozprawa t-1 zostala zapomniana na zadanie kandydata");
+    await expect(journal.append("t-1", 2, speech, [])).rejects.toThrow("Rozprawa zostala zapomniana na zadanie kandydata");
     expect(await journal.forget("brak")).toBe(false);
   });
 
   it("nieznana rozprawa -> TrialNotFoundError", async () => {
     const { journal } = setup();
-    await expect(journal.read("brak")).rejects.toThrow(new TrialNotFoundError("Nie ma rozprawy brak"));
+    await expect(journal.read("brak")).rejects.toThrow(new TrialNotFoundError("Nie ma takiej rozprawy"));
     await expect(journal.append("brak", 1, filed, [])).rejects.toBeInstanceOf(TrialNotFoundError);
   });
 

@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAX_PDF_BYTES } from "@trybunal/domain";
-import { buildApp, redactIds } from "./app.js";
+import { buildApp, redactIds, trialTag } from "./app.js";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
 import { LocalBus } from "./bus.js";
@@ -185,7 +185,7 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
     const { app, journal } = await setup();
     await journal.create("t-9");
     const res = await app.inject({ url: "/trials/t-9" });
-    expect([res.statusCode, res.json()]).toEqual([404, { error: "Rozprawa t-9 nie ma zapisanych zdarzen" }]);
+    expect([res.statusCode, res.json()]).toEqual([404, { error: "Rozprawa nie ma zapisanych zdarzen" }]);
   });
 
   it("CV jako plik i jako tekst naraz -> 400, w dowolnej kolejnosci pol", async () => {
@@ -217,6 +217,12 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
     expect(redactIds("/trials")).toBe("/trials");
   });
 
+  it("znacznik rozprawy do logow: rozny dla roznych id, bez samego id", () => {
+    expect(trialTag("3c62-ab")).toMatch(/^[0-9a-f]{12}$/u);
+    expect(trialTag("3c62-ab")).not.toBe(trialTag("3c62-ac"));
+    expect(trialTag("3c62-ab")).toBe("1eb2c86b326f"); // pierwsze 12 znakow SHA-256
+  });
+
   it("za proxy limit liczony per adres klienta z X-Forwarded-For", async () => {
     const journal = new Journal(new InMemoryEventStore(), newKey());
     const hub = new TrialHub();
@@ -237,8 +243,8 @@ describe("GET /trials/:id, anulowanie, zapomnienie", () => {
 
 describe("odpowiedzi bledow — tresc", () => {
   it.each([
-    ["GET", "/trials/x", 404, { error: "Nie ma rozprawy x" }],
-    ["DELETE", "/trials/x", 404, { error: "Nie ma rozprawy x" }],
+    ["GET", "/trials/x", 404, { error: "Nie ma takiej rozprawy" }],
+    ["DELETE", "/trials/x", 404, { error: "Nie ma takiej rozprawy" }],
     ["GET", "/trials/x/events?after=-1", 400, { error: "Niepoprawne dane", problems: ["(calosc): Too small: expected number to be >=0"] }],
   ] as const)("%s %s -> %i z trescia", async (method, url, status, json) => {
     const { app } = await setup();
@@ -252,7 +258,7 @@ describe("odpowiedzi bledow — tresc", () => {
     const busy = await app.inject({ method: "POST", url: "/trials", payload: body });
     expect(busy.json()).toEqual({ error: "Sad prowadzi juz 1 rozpraw — sprobuj za chwile" });
     await app.inject({ method: "DELETE", url: "/trials/t-1" });
-    expect((await app.inject({ url: "/trials/t-1" })).json()).toEqual({ error: "Rozprawa t-1 zostala zapomniana na zadanie kandydata" });
+    expect((await app.inject({ url: "/trials/t-1" })).json()).toEqual({ error: "Rozprawa zostala zapomniana na zadanie kandydata" });
     const broke = await setup({ trialBudgetNanoUsd: 2e10 });
     expect((await broke.app.inject({ method: "POST", url: "/trials", payload: body })).json()).toEqual({ error: "Dzienny budzet sadu jest wyczerpany — wroc jutro" });
   });

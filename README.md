@@ -336,6 +336,8 @@ pnpm --filter @trybunal/web build:demo      # -> apps/web/dist-demo
   nie ze zmiennych środowiska, które widać w `docker inspect`.
 - **nginx** serwuje frontend i przekazuje `/api` do serwera bez buforowania (SSE). Nagłówek
   `X-Forwarded-For` jest nadpisywany adresem klienta — podrzucony przez klienta nie obejdzie limitu wniesień.
+  Log dostępu nie ma id rozprawy (klucz do jej odczytu i usunięcia), query stringa ani nagłówka Referer;
+  API loguje zamiast id skrót SHA-256. Test dymny sprawdza, że id nie ma w logach.
 - Obraz API ma tylko zależności produkcyjne (`pnpm deploy --prod`) i działa jako użytkownik bez uprawnień roota.
 - Bez klucza rozprawy idą w próbie generalnej; z modelem:
   `ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build`. Uwaga: compose czyta też

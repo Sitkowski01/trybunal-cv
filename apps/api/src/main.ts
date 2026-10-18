@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { AnthropicLlmClient } from "@trybunal/llm";
 import pg from "pg";
-import { buildApp } from "./app.js";
+import { buildApp, trialTag } from "./app.js";
 import { LocalBus, type TrialBus } from "./bus.js";
 import { readConfig, toNanoUsd, withFileSecrets } from "./config.js";
 import { newKey, parseMasterKey } from "./crypto.js";
@@ -66,7 +66,7 @@ const service = new TrialService({
   dailyBudgetNanoUsd: toNanoUsd(config.DAILY_BUDGET_USD),
   maxRunning: config.MAX_RUNNING_TRIALS,
   onError: (error, trialId) => {
-    app.log.error({ err: error, trialId }, "Blad w tle rozprawy");
+    app.log.error({ err: error, trial: trialTag(trialId) }, "Blad w tle rozprawy");
   },
 });
 const app = await buildApp({

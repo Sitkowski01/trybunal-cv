@@ -36,6 +36,12 @@ id=$(echo "$filed" | sed -E 's/.*"trialId":"([^"]+)".*/\1/')
 echo "Rozprawa $id"
 verdict_in_stream "$id" 60
 
+# Id rozprawy to klucz do jej odczytu i usuniecia — nie moze lezec w logach nginx ani API.
+if docker compose logs web api 2>&1 | grep -qF "$id"; then
+  echo "Id rozprawy trafilo do logow" >&2
+  exit 1
+fi
+
 docker compose restart api
 wait_for "$web/api/health"
 verdict_in_stream "$id" 10

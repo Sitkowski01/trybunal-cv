@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { MAX_DEBATE_ROUNDS, MAX_PDF_BYTES, replay } from "@trybunal/domain";
@@ -79,7 +80,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     const envelopes = await journal.read(id);
     if (envelopes.length === 0) {
       // Rozprawa zalozona, ale wniesienie nie zapisalo sie (awaria bazy przy wnoszeniu).
-      throw new TrialNotFoundError(`Rozprawa ${id} nie ma zapisanych zdarzen`);
+      throw new TrialNotFoundError("Rozprawa nie ma zapisanych zdarzen");
     }
     // Bez tekstu CV i oferty: kandydat je zna, a odpowiedz moze trafic do logow czy pamieci przegladarki.
     const s = replay(envelopes.map((e) => e.event));
@@ -118,7 +119,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
 
   app.delete("/trials/:id", async (request, reply) => {
     const { id } = parse(TrialParams, request.params);
-    return (await service.forget(id)) ? reply.code(204).send() : reply.code(404).send({ error: `Nie ma rozprawy ${id}` });
+    return (await service.forget(id)) ? reply.code(204).send() : reply.code(404).send({ error: "Nie ma takiej rozprawy" });
   });
 
   return app;
@@ -142,6 +143,9 @@ async function readMultipart(parts: AsyncIterableIterator<import("@fastify/multi
 }
 
 export const redactIds = (url: string) => url.replace(/\/trials\/[^/?]+/u, "/trials/:id");
+
+/** Do logow zamiast id: wiaze wpisy jednej rozprawy, ale nie otwiera jej ani nie pozwala usunac. */
+export const trialTag = (trialId: string) => createHash("sha256").update(trialId).digest("hex").slice(0, 12);
 
 function sendError(reply: FastifyReply, error: unknown) {
   if (error instanceof InvalidTrialError) {

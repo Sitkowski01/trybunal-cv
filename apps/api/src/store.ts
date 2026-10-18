@@ -61,7 +61,7 @@ export class InMemoryEventStore implements EventStore {
 
   createTrial(trialId: string, wrappedKey: Buffer, createdAt: Date): Promise<void> {
     if (this.trials.has(trialId)) {
-      return Promise.reject(new ConflictError(`Rozprawa ${trialId} juz istnieje`));
+      return Promise.reject(new ConflictError("Rozprawa juz istnieje"));
     }
     this.trials.set(trialId, { wrappedKey: Buffer.from(wrappedKey), createdAt, endedAt: null, aliveAt: createdAt, events: [] });
     return Promise.resolve();
@@ -70,10 +70,10 @@ export class InMemoryEventStore implements EventStore {
   append(record: StoredRecord): Promise<void> {
     const trial = this.trials.get(record.trialId);
     if (trial === undefined) {
-      return Promise.reject(new ConflictError(`Nie ma rozprawy ${record.trialId}`));
+      return Promise.reject(new ConflictError("Nie ma takiej rozprawy"));
     }
     if (record.seq !== trial.events.length + 1) {
-      return Promise.reject(new ConflictError(`Zdarzenie ${String(record.seq)} nie jest kolejnym w rozprawie ${record.trialId}`));
+      return Promise.reject(new ConflictError(`Zdarzenie ${String(record.seq)} nie jest kolejnym w rozprawie`));
     }
     trial.events.push({ ...record, payload: Buffer.from(record.payload) });
     return Promise.resolve();

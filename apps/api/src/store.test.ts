@@ -9,9 +9,9 @@ describe("InMemoryEventStore", () => {
     const store = new InMemoryEventStore();
     await store.createTrial("t", Buffer.from("k"), new Date());
     const record = { trialId: "t", seq: 2, type: "TrialFiled", occurredAt: new Date(), schemaVersion: 1, payload: Buffer.from([1]), calls: [] };
-    await expect(store.createTrial("t", Buffer.from("k"), new Date())).rejects.toThrow("Rozprawa t juz istnieje");
-    await expect(store.append({ ...record, trialId: "x" })).rejects.toThrow("Nie ma rozprawy x");
-    await expect(store.append(record)).rejects.toThrow("Zdarzenie 2 nie jest kolejnym w rozprawie t");
+    await expect(store.createTrial("t", Buffer.from("k"), new Date())).rejects.toThrow("Rozprawa juz istnieje");
+    await expect(store.append({ ...record, trialId: "x" })).rejects.toThrow("Nie ma takiej rozprawy");
+    await expect(store.append(record)).rejects.toThrow("Zdarzenie 2 nie jest kolejnym w rozprawie");
   });
 
   it("trzyma kopie buforow — zmiana po zapisie nie psuje dziennika", async () => {

@@ -78,7 +78,7 @@ export class PostgresEventStore implements EventStore {
     try {
       await this.pool.query("INSERT INTO trials (trial_id, created_at, wrapped_key) VALUES ($1, $2, $3)", [trialId, createdAt, wrappedKey]);
     } catch (error) {
-      if (sqlState(error) === UNIQUE_VIOLATION) throw new ConflictError(`Rozprawa ${trialId} juz istnieje`);
+      if (sqlState(error) === UNIQUE_VIOLATION) throw new ConflictError("Rozprawa juz istnieje");
       throw error;
     }
   }
@@ -97,12 +97,12 @@ export class PostgresEventStore implements EventStore {
     } catch (error) {
       const state = sqlState(error);
       if (state === UNIQUE_VIOLATION || state === FOREIGN_KEY_VIOLATION) {
-        throw new ConflictError(`Zdarzenie ${String(record.seq)} odrzucone w rozprawie ${record.trialId}`);
+        throw new ConflictError(`Zdarzenie ${String(record.seq)} odrzucone`);
       }
       throw error;
     }
     if (inserted.rowCount !== 1) {
-      throw new ConflictError(`Zdarzenie ${String(record.seq)} nie jest kolejnym w rozprawie ${record.trialId}`);
+      throw new ConflictError(`Zdarzenie ${String(record.seq)} nie jest kolejnym w rozprawie`);
     }
   }
 
