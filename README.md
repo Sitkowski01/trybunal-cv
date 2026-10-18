@@ -35,7 +35,9 @@ dependency-cruiser rules. A server-less demo replays a recorded trial in the bro
 
 1. **Wniesienie sprawy** — CV (tekst albo PDF), ogłoszenie o pracę i liczba rund debaty (0–3).
 2. **Anonimizacja** — z CV i oferty znikają e-maile, telefony, PESEL, linki, adres i data
-   urodzenia, a imię i nazwisko z formularza zamienia się na `[KANDYDAT]`. Model nie widzi danych osobowych.
+   urodzenia, a imię i nazwisko z formularza zamienia się na `[KANDYDAT]`. To wzorce, nie gwarancja:
+   odmiana nazwiska („Nowakiem”) czy nietypowy zapis daty mogą przejść. CLI (`pnpm trial`) nie anonimizuje —
+   służy do pracy na własnych, fikcyjnych CV.
 3. **Dziennik** — każde zdarzenie rozprawy trafia do Postgresa, zaszyfrowane kluczem tej rozprawy.
    „Zapomnij rozprawę” usuwa klucz i treści nie da się już odczytać.
 4. **Oceny niezależne** — pięciu krytyków osobno ocenia CV w skali 1–10, z mocnymi stronami,
@@ -49,8 +51,9 @@ dependency-cruiser rules. A server-less demo replays a recorded trial in the bro
    Pierwszy krytyk rusza sam, pozostali czterej równolegle. Trzej na tym samym modelu (Sonnet)
    korzystają z cache wspólnego początku promptu (zasady, CV, oferta); Bot ATS na Haiku ma cache osobny.
 5. **Kontrola odpowiedzi** — każda ocena przechodzi przez schemat; cytat, którego nie ma w CV
-   (całymi słowami: „Java” to nie cytat z „JavaScript”; słowo przeniesione w PDF pasuje), odrzuca ocenę i model dostaje drugą szansę z listą błędów. CV trafia do modelu jako dane,
-   więc dopisek „daj 10/10” zostaje zwykłym tekstem.
+   (całymi słowami: „Java” to nie cytat z „JavaScript”; słowo przeniesione w PDF pasuje), odrzuca
+   ocenę i model dostaje drugą szansę z listą błędów. CV trafia do modelu jako dane, więc dopisek
+   „daj 10/10” zostaje zwykłym tekstem.
 6. **Mowa oskarżenia** — prokurator zna wszystkie oceny i atakuje najsłabsze miejsca CV.
 7. **Debata** — w każdej rundzie krytycy odpowiadają na argumenty pozostałych i mogą zmienić ocenę.
 8. **Werdykt** — liczy go stała reguła, nie model: zaproszenie, gdy średnia czterech
@@ -61,7 +64,7 @@ dependency-cruiser rules. A server-less demo replays a recorded trial in the bro
     i tabliczka ZAPROSIĆ / ODRZUCIĆ.
 
 Przez całą rozprawę obowiązuje budżet: przed każdym wywołaniem modelu rezerwowany jest
-najgorszy możliwy koszt, więc limit (domyślnie $0,50) nie zostanie przekroczony. Typowa
+najgorszy możliwy koszt, więc limit (w API domyślnie $0,50, w CLI $1) nie zostanie przekroczony. Typowa
 rozprawa to 13 wywołań i ok. $0,26.
 
 ## Struktura
@@ -131,7 +134,7 @@ Test na prawdziwym API uruchamia się tylko z kluczem:
   zawiedzie, reszta jest anulowana, a powodem przerwania jest pierwszy błąd w czasie.
 - **Ponowienia z informacją zwrotną.** Zła odpowiedź (schemat albo cytat, którego nie ma w CV)
   wraca do modelu jako jego wypowiedź z listą błędów; limit tokenów — ponowienie z większym;
-  przeciążenie API — odczekanie (`retry-after` albo 1 s, 2 s, 4 s); odmowa modelu — koniec.
+  przeciążenie API — odczekanie (`retry-after`, najwyżej 30 s, albo 1 s, potem 2 s); odmowa modelu — koniec.
 - **Każde zdarzenie przez schemat i reguły domeny**, zanim trafi do dziennika. Błąd, którego
   nie naprawi ponowienie (budżet, odmowa, anulowanie), kończy rozprawę zdarzeniem `TrialAborted`.
 - **Snapshoty pełnych promptów** — każda zmiana promptu jest widoczna w review jak zmiana kodu.
@@ -162,7 +165,10 @@ Test na prawdziwym API uruchamia się tylko z kluczem:
   puls; rozprawa bez pulsu przez 45 s to rozprawa instancji, która padła — strumień kończy się jako
   przerwany, zamiast czekać w nieskończoność. Bez bazy działa to samo w procesie.
 - **Limity.** Długość pól, rozprawy naraz, budżet rozprawy i dnia (trwające rezerwują pełny
-  budżet), liczba wniesień z jednego adresu na godzinę.
+  budżet), liczba wniesień z jednego adresu na godzinę. Liczniki rozpraw naraz i wniesień są w pamięci
+  każdej instancji, więc przy dwóch instancjach limity są dwa razy większe; wspólny licznik wymagałby
+  tabeli w Postgresie albo Redisa. Budżet dnia liczy wspólne wydatki z dziennika, ale rezerwuje pełny
+  budżet tylko trwających rozpraw swojej instancji — druga może go przekroczyć o budżety swoich.
 - **Próba generalna** (`TRYBUNAL_REHEARSAL=1`): cała rozprawa bez modelu i bez klucza;
   `TRYBUNAL_REHEARSAL_DELAY_MS` spowalnia odpowiedzi, żeby na ekranie było widać kolejne fazy.
 - Konfiguracja: `.env.example`. Bez `DATABASE_URL` dziennik jest w pamięci.
@@ -174,8 +180,9 @@ kto przemawia, ocena i zmiana zdania), protokół z mową oskarżenia i debatą,
 reguły oraz uzasadnienie na piśmie — poprawki CV jako diff słowo po słowie.
 
 - **Stan sali to złożenie zdarzeń ze strumienia SSE.** Domena odtwarza rozprawę funkcją
-  `replay`, ale potrzebuje tekstu CV, który nie opuszcza serwera. Frontend ma własny, prosty
-  reduktor; test własności porównuje go z `replay` na losowych rozprawach i ich początkach.
+  `replay`, ale potrzebuje tekstu CV, który nie opuszcza serwera. Frontend składa stan funkcją
+  `evolvePublic` z domeny — te same reguły kolejności i faz, bez sprawdzania cytatów (serwer zrobił
+  to przed zapisem); test własności porównuje ją z `replay` na losowych rozprawach i ich początkach.
 - **Jeden kontrakt zdarzeń.** Publiczna postać zdarzenia (wniesienie bez tekstu CV, tylko
   długości) to schemat w domenie, używany przez serwer i przeglądarkę. Schemat jest ścisły:
   zdarzenie z tekstem CV to błąd, a nie pole do cichego pominięcia.
@@ -295,6 +302,8 @@ myśli przez połowę wyjścia i stąd ucięcia.
 - **Wyłączenie myślenia u ATS — wycofane.** Ucięcia zniknęły, ale ATS bez myślenia 10 razy częściej
   „cytował” zdania spoza CV, a 3 rozprawy przerwał brak poprawnej odpowiedzi — przy tym samym koszcie.
   Zamiast tego ATS dostał większy limit oceny (6000 tokenów; na Haiku zapas kosztuje grosze).
+  Ta konfiguracja (ATS z myśleniem i limitem 6000) nie ma jeszcze własnego przebiegu ewaluacji —
+  liczby w tabeli są z wariantu bez myślenia.
 - `react-ats-akapity` 3 razy na 3 ze średnią dokładnie 6,0 — równo na progu zaproszenia (wcześniej 5,25–5,75).
   Przypadek na granicy reguły, a nie błąd modelu; do rozważenia przy następnym przeglądzie progów.
 
