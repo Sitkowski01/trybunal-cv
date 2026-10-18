@@ -353,9 +353,10 @@ pnpm --filter @trybunal/web build:demo      # -> apps/web/dist-demo
   (bez `unsafe-eval` — zod działa w trybie bez kompilacji), `frame-ancestors none`, `nosniff`,
   `Referrer-Policy: no-referrer` (id rozprawy w adresie strony nie wychodzi w nagłówku Referer).
 - Obraz API ma tylko zależności produkcyjne (`pnpm deploy --prod`) i działa jako użytkownik bez uprawnień roota.
-- Bez klucza rozprawy idą w próbie generalnej; z modelem:
-  `ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build`. Uwaga: compose czyta też
-  plik `.env` — jeśli jest w nim klucz i `TRYBUNAL_REHEARSAL=0`, rozprawy idą na prawdziwy model.
+- Bez klucza rozprawy idą w próbie generalnej; z modelem klucz idzie jako sekret compose (plik w
+  `/run/secrets`, nie zmienna widoczna w `docker inspect`):
+  `ANTHROPIC_API_KEY_FILE=./klucz.txt TRYBUNAL_REHEARSAL=0 docker compose up --build`. Uwaga: compose czyta
+  też plik `.env` — jeśli są w nim `ANTHROPIC_API_KEY_FILE` i `TRYBUNAL_REHEARSAL=0`, rozprawy idą na prawdziwy model.
 - CI uruchamia `scripts/compose-smoke.sh` (zawsze w próbie generalnej, bez klucza): rozprawa przez nginx
   do werdyktu przy dwóch instancjach API, restart API i ponowny odczyt dziennika z Postgresa.
 

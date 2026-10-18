@@ -1,6 +1,6 @@
 # Cala aplikacja lokalnie: docker compose up --build  ->  http://localhost:8080
-# Bez klucza rozprawy ida w probie generalnej (bez modelu). Z modelem:
-#   ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build
+# Bez klucza rozprawy ida w probie generalnej (bez modelu). Z modelem (klucz w pliku, nie w zmiennej):
+#   ANTHROPIC_API_KEY_FILE=./sciezka/do/klucza TRYBUNAL_REHEARSAL=0 docker compose up --build
 services:
   # Sekrety losowane przy pierwszym starcie i trzymane w wolumenie, a nie wpisane w repozytorium:
   # klucz glowny szyfrowania dziennika i haslo bazy. Kazdy plik czyta tylko jego wlasciciel
@@ -49,12 +49,14 @@ services:
     environment:
       DATABASE_URL_FILE: /keys/database-url
       TRYBUNAL_MASTER_KEY_FILE: /keys/master
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_api_key
       TRYBUNAL_REHEARSAL: ${TRYBUNAL_REHEARSAL:-1}
       # W probie generalnej przerwa przed odpowiedzia — widac kolejne fazy na scenie.
       TRYBUNAL_REHEARSAL_DELAY_MS: ${TRYBUNAL_REHEARSAL_DELAY_MS:-1500}
       # Za nginx: limit wniesien liczony per adres klienta, nie per proxy.
       TRUST_PROXY: "1"
+    secrets:
+      - anthropic_api_key
     volumes:
       - keys:/keys:ro
     healthcheck:
@@ -72,3 +74,10 @@ services:
 volumes:
   db:
   keys:
+
+# Klucz API jako sekret (plik w /run/secrets), a nie zmienna srodowiska widoczna w docker inspect.
+# Bez ANTHROPIC_API_KEY_FILE pusty plik z repozytorium — wtedy tylko proba generalna.
+# Plik musi byc czytelny dla uzytkownika node (uid 1000) w kontenerze.
+secrets:
+  anthropic_api_key:
+    file: ${ANTHROPIC_API_KEY_FILE:-./docker/brak-klucza}
