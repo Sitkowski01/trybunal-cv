@@ -119,6 +119,24 @@ describe("POST /trials", () => {
     expect((await app.inject({ method: "POST", url: "/trials", payload: body })).statusCode).toBe(429);
     await service.settled("t-1");
   });
+
+  it("CSRF: zapytanie zmieniajace stan z obcej strony -> 403, z tej samej strony i spoza przegladarki przechodzi", async () => {
+    const { app, service } = await setup();
+    const post = (site?: string) =>
+      app.inject({ method: "POST", url: "/trials", payload: body, headers: site === undefined ? {} : { "sec-fetch-site": site } });
+    for (const site of ["cross-site", "same-site"]) {
+      const res = await post(site);
+      expect([res.statusCode, res.json()]).toEqual([403, { error: "Zapytanie z obcej strony odrzucone" }]);
+    }
+    expect((await app.inject({ method: "DELETE", url: "/trials/t-1", headers: { "sec-fetch-site": "cross-site" } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/trials/t-1/cancel", headers: { "sec-fetch-site": "cross-site" } })).statusCode).toBe(403);
+    expect((await post("same-origin")).statusCode).toBe(202);
+    expect((await post("none")).statusCode).toBe(202);
+    expect((await post()).statusCode).toBe(202);
+    // Odczyt z obcej strony nie zmienia stanu (i tak blokuje go brak CORS).
+    expect((await app.inject({ url: "/trials/t-1", headers: { "sec-fetch-site": "cross-site" } })).statusCode).toBe(200);
+    await Promise.all(["t-1", "t-2", "t-3"].map((id) => service.settled(id)));
+  });
 });
 
 describe("GET /trials/:id, anulowanie, zapomnienie", () => {

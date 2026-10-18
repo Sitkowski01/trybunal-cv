@@ -57,6 +57,17 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
 
   app.setErrorHandler((error, _request, reply) => sendError(reply, error));
 
+  // CSRF: obca strona moze wyslac formularz z przegladarki odwiedzajacego i zuzyc budzet sadu.
+  // Przegladarka podpisuje kazde zapytanie naglowkiem Sec-Fetch-Site, ktorego strona nie podrobi;
+  // curl i inne programy go nie wysylaja — przechodza, bo nie dzialaja w cudzym imieniu.
+  app.addHook("onRequest", async (request, reply) => {
+    if (request.method === "GET" || request.method === "HEAD") return;
+    const site = request.headers["sec-fetch-site"];
+    if (site === "cross-site" || site === "same-site") {
+      await reply.code(403).send({ error: "Zapytanie z obcej strony odrzucone" });
+    }
+  });
+
   app.get("/health", () => ({ ok: true }));
 
   app.post(
