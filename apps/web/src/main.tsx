@@ -1,3 +1,4 @@
+import "./zod-config.js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createApi } from "./api/client.js";

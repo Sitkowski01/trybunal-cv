@@ -30,6 +30,14 @@ TRYBUNAL_REHEARSAL=1 ANTHROPIC_API_KEY= TRYBUNAL_REHEARSAL_DELAY_MS=300 docker c
 wait_for "$web/api/health"
 page=$(curl -fsS "$web/")
 grep -q '<div id="root">' <<<"$page"
+# Naglowki bezpieczenstwa na stronie i na plikach z /assets/ (add_header w location kasuje odziedziczone).
+asset=$(grep -oE '/assets/[^"]+.js' <<<"$page" | head -n 1)
+for url in "$web/" "$web$asset"; do
+  headers=$(curl -fsSI "$url")
+  grep -qi "^content-security-policy: default-src 'self'" <<<"$headers"
+  grep -qi "^referrer-policy: no-referrer" <<<"$headers"
+  grep -qi "^x-content-type-options: nosniff" <<<"$headers"
+done
 
 filed=$(curl -fsS -X POST "$web/api/trials" -F "cvText=<examples/cv-anna-nowak.md" -F "jobOffer=<examples/oferta-junior-backend.md" -F debateRounds=1)
 id=$(echo "$filed" | sed -E 's/.*"trialId":"([^"]+)".*/\1/')

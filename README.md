@@ -349,6 +349,9 @@ pnpm --filter @trybunal/web build:demo      # -> apps/web/dist-demo
   `X-Forwarded-For` jest nadpisywany adresem klienta — podrzucony przez klienta nie obejdzie limitu wniesień.
   Log dostępu nie ma id rozprawy (klucz do jej odczytu i usunięcia), query stringa ani nagłówka Referer;
   API loguje zamiast id skrót SHA-256. Test dymny sprawdza, że id nie ma w logach.
+- **Nagłówki bezpieczeństwa** (`docker/security-headers.conf`): CSP tylko z własnymi skryptami i połączeniami
+  (bez `unsafe-eval` — zod działa w trybie bez kompilacji), `frame-ancestors none`, `nosniff`,
+  `Referrer-Policy: no-referrer` (id rozprawy w adresie strony nie wychodzi w nagłówku Referer).
 - Obraz API ma tylko zależności produkcyjne (`pnpm deploy --prod`) i działa jako użytkownik bez uprawnień roota.
 - Bez klucza rozprawy idą w próbie generalnej; z modelem:
   `ANTHROPIC_API_KEY=sk-... TRYBUNAL_REHEARSAL=0 docker compose up --build`. Uwaga: compose czyta też
