@@ -1,6 +1,5 @@
 import { Worker } from "node:worker_threads";
 import { extractText, getDocumentProxy } from "unpdf";
-import type { PdfWorkerReply } from "./pdf-worker.ts";
 
 /** Plik nie nadaje sie na CV: to nie PDF, jest zaszyfrowany albo nie ma warstwy tekstowej (skan). */
 export class UnreadablePdfError extends Error {
@@ -42,6 +41,9 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
   }
   return text;
 }
+
+/** Odpowiedz watku: tekst albo blad (UnreadablePdfError przechodzi z komunikatem, inne — jako ogolne). */
+export type PdfWorkerReply = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly readable: boolean; readonly message: string };
 
 export interface IsolatedPdfOptions {
   /** Po tylu ms watek jest zabijany, a plik odrzucony. */
