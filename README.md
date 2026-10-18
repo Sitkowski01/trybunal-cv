@@ -27,7 +27,7 @@ treated as untrusted: every response goes through a full schema, invented quotes
 passed as data so prompt injection stays text, and a hard budget in integer nano-dollars reserves the
 worst-case cost before every call. An evaluation suite (20 fictional CVs with expected verdicts and trap tags)
 measures accuracy, stability across repeats and cost, and compares prompt versions. TypeScript monorepo,
-tested with Vitest + fast-check, Testcontainers, Playwright, mutation testing (Stryker ≥ 97%) and
+tested with Vitest + fast-check, Testcontainers, Playwright, mutation testing (Stryker 96.7–99.4% per package) and
 dependency-cruiser rules. A server-less demo replays a recorded trial in the browser.
 </details>
 
@@ -384,6 +384,9 @@ pnpm e2e        # build + Playwright: API w próbie generalnej i zbudowany front
   w przeglądarce z WebGL (ujęcia, dymki, werdykt, tryb bez ruchu), demo z nagrania pod podścieżką bez żadnego
   zapytania do API. Docker compose sprawdzany w CI testem dymnym.
 - Mutation testing (Stryker), próg 90%.
+- W liczbach (CI z 17.10): 981 testów jednostkowych i integracyjnych + 12 e2e w przeglądarce;
+  mutation score według pakietów: domena 98,5%, LLM 99,4%, orkiestracja 99,0%, API 98,0%,
+  frontend 98,6%, ewaluacje 96,7%.
 - Reguły architektury (dependency-cruiser): domena nie korzysta z IO ani z innych pakietów,
   frontend nie zna warstwy LLM, stan sali nie zna Reacta, kod produkcyjny nie zna ewaluacji, brak cykli.
 - Każdy commit ma maks. 200 linii zmian (hook `.githooks/pre-commit`).
