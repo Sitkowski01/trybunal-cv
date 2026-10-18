@@ -19,7 +19,7 @@ export interface ModelPricing {
 
 export const MODELS = {
   "claude-opus-5-5": { standard: { input: 4000, cacheWrite: 5000, cacheRead: 200, output: 20_000 } },
-  "claude-sonnet-5-5": { standard: { input: 2000, cacheWrite: 2500, cacheRead: 100, output: 10_000 } },
+  "claude-sonnet-5-5": { standard: { input: 2000, cacheWrite: 2500, cacheRead: 200, output: 10_000 } },
   "claude-haiku-5-5": {
     standard: { input: 100, cacheWrite: 125, cacheRead: 10, output: 500 },
     longContext: { aboveInputTokens: 100_000, rates: { input: 500, cacheWrite: 625, cacheRead: 50, output: 2500 } },

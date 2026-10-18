@@ -20,10 +20,11 @@ describe("costNanoUsd", () => {
     expect(costNanoUsd("claude-opus-5-5", usage(1000, 1000, 1000, 1000))).toBe(1000 * (4000 + 20_000 + 5000 + 200));
   });
 
-  it("odczyt z cache jest 20 razy tanszy od zwyklego wejscia w Sonnecie", () => {
-    const cached = costNanoUsd("claude-sonnet-5-5", usage(0, 0, 0, 10_000));
-    const plain = costNanoUsd("claude-sonnet-5-5", usage(10_000, 0));
-    expect(plain / cached).toBe(20);
+  it("odczyt z cache: Sonnet i Haiku 10 razy taniej od zwyklego wejscia, Opus 20 razy", () => {
+    const ratio = (model: keyof typeof MODELS) => costNanoUsd(model, usage(10_000, 0)) / costNanoUsd(model, usage(0, 0, 0, 10_000));
+    expect(ratio("claude-sonnet-5-5")).toBe(10);
+    expect(ratio("claude-haiku-5-5")).toBe(10);
+    expect(ratio("claude-opus-5-5")).toBe(20);
   });
 
   it("Haiku do 100 tys. tokenow wejscia liczy stawke podstawowa", () => {
