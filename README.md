@@ -398,9 +398,9 @@ pnpm e2e        # build + Playwright: API w próbie generalnej i zbudowany front
   w przeglądarce z WebGL (ujęcia, dymki, werdykt, tryb bez ruchu), demo z nagrania pod podścieżką bez żadnego
   zapytania do API. Docker compose sprawdzany w CI testem dymnym.
 - Mutation testing (Stryker), próg 90%.
-- W liczbach (CI z 17.10): 981 testów jednostkowych i integracyjnych + 12 e2e w przeglądarce;
-  mutation score według pakietów: domena 98,5%, LLM 99,4%, orkiestracja 99,0%, API 98,0%,
-  frontend 98,6%, ewaluacje 96,7%.
+- W liczbach (CI z 18.10): 1000 testów jednostkowych i integracyjnych + 12 e2e w przeglądarce;
+  mutation score według pakietów: domena 97,4%, LLM 99,4%, orkiestracja 99,0%, API 97,7%,
+  frontend 98,4%, ewaluacje 96,7%.
 - Reguły architektury (dependency-cruiser): domena nie korzysta z IO ani z innych pakietów,
   frontend nie zna warstwy LLM, stan sali nie zna Reacta, kod produkcyjny nie zna ewaluacji, brak cykli.
 - Każdy commit ma maks. 200 linii zmian (hook `.githooks/pre-commit`).
