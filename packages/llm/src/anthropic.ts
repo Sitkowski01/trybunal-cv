@@ -72,7 +72,6 @@ export class AnthropicLlmClient implements LlmClient {
       system: [{ type: "text", text: request.rules }],
       messages: buildMessages(request),
       output_config: { format: { type: "json_schema", schema: zodOutputFormat(request.schema).schema } },
-      ...(request.thinking === "off" ? { thinking: { type: "disabled" } } : {}),
     };
     const started = this.now();
     let message: Message;

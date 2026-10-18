@@ -22,12 +22,6 @@ export interface CourtConfig {
   };
   /** Ile razy pytamy o to samo, zanim rozprawa zostanie przerwana. */
   readonly maxAttempts: number;
-  /**
-   * Krytycy oceniajacy bez ukrytego rozumowania. Domyslnie nikt — ewaluacja 17.10 (60 rozpraw): Bot ATS
-   * bez myslenia nie byl ucinany limitem, ale 10 razy czesciej zmyslal cytaty i 3 rozprawy przerwal brak
-   * poprawnej odpowiedzi, przy tym samym koszcie. Zamiast tego wiekszy limit oceny ATS (maxTokens.assessment).
-   */
-  readonly assessmentWithoutThinking: readonly CriticId[];
 }
 
 export const DEFAULT_CONFIG: CourtConfig = {
@@ -46,14 +40,15 @@ export const DEFAULT_CONFIG: CourtConfig = {
   maxTokens: {
     // Bot ATS z miejscem na ukryte rozumowanie: Haiku 5.5 mysli przez ok. polowe wyjscia, a przy 3000 byl
     // ucinany w ok. 60% rozpraw (pierwsza proba w kosz). Na Haiku zapas kosztuje grosze; Sonnetom wiekszy
-    // limit podnioslby rezerwacje najgorszego kosztu ponad budzet rozprawy przy dlugim CV.
+    // limit podnioslby rezerwacje najgorszego kosztu ponad budzet rozprawy przy dlugim CV. Wylaczenie
+    // myslenia ATS ewaluacja 17.10 obalila (10 razy wiecej zmyslonych cytatow), a Sonnet i Opus 5.5
+    // w ogole go nie przyjmuja (400).
     assessment: { ats: 6000, hr: 3000, techLead: 3000, hiringManager: 3000, prosecutor: 3000 },
     prosecution: 1500,
     statement: 800,
     justification: 2000,
   },
   maxAttempts: 3,
-  assessmentWithoutThinking: [],
 };
 
 /**

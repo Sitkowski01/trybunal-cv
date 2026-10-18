@@ -35,11 +35,6 @@ export interface StructuredRequest<T> {
   readonly retry?: RetryFeedback;
   /** Schemat odpowiedzi; bez .transform(), bo transformacji nie da sie zapisac w JSON Schema. */
   readonly schema: z.ZodType<T>;
-  /**
-   * "off": bez ukrytego rozumowania przed odpowiedzia. Modele 5.5 domyslnie mysla i placi sie za to jak
-   * za wyjscie, a myslenie wlicza sie w maxTokens — przy prostym zadaniu (slowa kluczowe) to czysty koszt.
-   */
-  readonly thinking?: "off";
 }
 
 export interface LlmResult<T> {

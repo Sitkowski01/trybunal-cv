@@ -61,17 +61,6 @@ describe("runTrial — przebieg", () => {
     expect(run.calls.every((c) => c.outcome === "ok" && c.attempt === 1)).toBe(true);
   });
 
-  it("bez myslenia ocenia tylko krytyk z konfiguracji; domyslnie nikt (ewaluacja 17.10)", async () => {
-    const llm = new FakeLlmClient(happy);
-    await runTrial(input, { llm, config: { ...DEFAULT_CONFIG, assessmentWithoutThinking: ["ats"] } });
-    expect(llm.calls.filter((c) => c.thinking === "off").map((c) => c.label)).toEqual(["assessment:ats"]);
-    expect(DEFAULT_CONFIG.assessmentWithoutThinking).toEqual([]);
-
-    const all = new FakeLlmClient(happy);
-    await runTrial(input, { llm: all });
-    expect(all.calls.some((c) => c.thinking !== undefined)).toBe(false);
-  });
-
   it("kazde zapytanie niesie wspolne zasady i dokumenty — ten sam poczatek do cache", async () => {
     const llm = new FakeLlmClient(happy);
     await runTrial(input, { llm });
