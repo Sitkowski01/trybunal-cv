@@ -127,10 +127,10 @@ describe("ask", () => {
     expect(sleeps).toEqual([MAX_WAIT_MS]);
   });
 
-  it("brak odpowiedzi, ktory mogl kosztowac (timeout), ma koszt nieznany", async () => {
-    const { result, calls } = run(scripted(new LlmTransportError("timeout", true, true), ok(1)).llm);
+  it("brak odpowiedzi, ktory mogl kosztowac (timeout), ma koszt nieznany — zapisany jako kwota z budzetu", async () => {
+    const { result, calls } = run(scripted(new LlmTransportError("timeout", true, true, null, null, 777), ok(1)).llm);
     await result;
-    expect(calls[0]).toMatchObject({ outcome: "transport", usage: null, costKnown: false });
+    expect(calls[0]).toMatchObject({ outcome: "transport", usage: null, costKnown: false, costNanoUsd: 777 });
   });
 
   it("anulowanie przed proba: nic nie idzie do modelu, a czekanie dostaje sygnal", async () => {

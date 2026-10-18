@@ -83,8 +83,10 @@ export class BudgetedLlmClient implements LlmClient {
       this.spent += result.costNanoUsd;
       return result;
     } catch (error) {
-      this.spent += chargeFor(error, worst);
-      throw error;
+      const charge = chargeFor(error, worst);
+      this.spent += charge;
+      // Rejestr wywolan (a z niego dzienny limit) musi zobaczyc te sama kwote co budzet rozprawy.
+      throw error instanceof LlmTransportError && charge > 0 ? error.charged(charge) : error;
     } finally {
       this.reserved -= worst;
     }

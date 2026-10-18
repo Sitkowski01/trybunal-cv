@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG } from "@trybunal/court";
-import { FakeLlmClient, type LlmClient } from "@trybunal/llm";
+import { FakeLlmClient, type LlmClient, LlmTransportError } from "@trybunal/llm";
 import { describe, expect, it, vi } from "vitest";
 import { newKey } from "./crypto.js";
 import { TrialHub } from "./hub.js";
@@ -180,6 +180,17 @@ describe("TrialService — limity", () => {
     await service.file(request);
     await service.settled("t-1");
     expect(since).toEqual([new Date("2026-10-12T00:00:00Z")]);
+  });
+
+  it("zapytanie bez odpowiedzi, ktore moglo kosztowac, liczy sie do budzetu dnia rezerwacja", async () => {
+    const lost: LlmClient = { generate: () => Promise.reject(new LlmTransportError("Zapytanie przerwane", false, true)) };
+    const { service, journal } = setup({ llm: () => lost });
+    await service.file(request);
+    await service.settled("t-1");
+    const calls = (await journal.read("t-1")).flatMap((e) => e.calls);
+    expect(calls).toMatchObject([{ outcome: "transport", costKnown: false }]);
+    expect(calls[0]?.costNanoUsd).toBeGreaterThan(0);
+    expect(await journal.spentSince(new Date(0))).toBe(calls[0]?.costNanoUsd);
   });
 
   it("odrzucone wniesienie zwalnia miejsce", async () => {

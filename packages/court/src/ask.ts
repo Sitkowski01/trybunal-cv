@@ -20,7 +20,7 @@ export interface CallRecord {
   readonly outcome: "ok" | "rejected" | "invalid" | "incomplete" | "transport";
   readonly usage: TokenUsage | null;
   readonly costNanoUsd: number;
-  /** false: brak odpowiedzi, ktory mogl kosztowac — budzet liczy najgorszy przypadek, my go nie znamy. */
+  /** false: brak odpowiedzi, ktory mogl kosztowac — costNanoUsd to najgorszy przypadek policzony przez budzet. */
   readonly costKnown: boolean;
   readonly durationMs: number;
 }
@@ -84,8 +84,9 @@ export async function ask<T>(llm: LlmClient, request: StructuredRequest<T>, opti
         const outcome = error instanceof IncompleteOutputError ? "incomplete" : "invalid";
         options.record({ ...base, outcome, usage: error.usage, costNanoUsd: error.costNanoUsd, costKnown: true, durationMs: 0 });
       } else if (error instanceof LlmTransportError) {
+        // Koszt nieznany: liczymy to, co policzyl budzet (najgorszy przypadek), zeby dzienny limit go widzial.
         const costKnown = !error.mayHaveBeenBilled;
-        options.record({ ...base, outcome: "transport", usage: null, costNanoUsd: 0, costKnown, durationMs: 0 });
+        options.record({ ...base, outcome: "transport", usage: null, costNanoUsd: error.chargedNanoUsd, costKnown, durationMs: 0 });
       }
       if (error instanceof InvalidOutputError) {
         current = { ...current, retry: { previousOutput: error.rawOutput, problems: error.problems } };

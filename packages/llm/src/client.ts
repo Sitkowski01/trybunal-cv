@@ -103,7 +103,8 @@ export class IncompleteOutputError extends LlmError {
 /**
  * Nie dostalismy odpowiedzi: przerwanie, timeout, zerwane polaczenie, odmowa API (429, 5xx).
  * Zuzycia nie znamy. mayHaveBeenBilled mowi, czy zapytanie moglo dojsc do modelu — wtedy
- * budzet zaklada najgorszy koszt.
+ * budzet zaklada najgorszy koszt i zapisuje go w chargedNanoUsd — tyle trzeba doliczyc do wydatkow
+ * (np. dziennego limitu), choc faktyczny koszt moze byc mniejszy.
  */
 export class LlmTransportError extends Error {
   override readonly name = "LlmTransportError";
@@ -114,8 +115,14 @@ export class LlmTransportError extends Error {
     readonly mayHaveBeenBilled: boolean,
     readonly status: number | null = null,
     readonly retryAfterMs: number | null = null,
+    readonly chargedNanoUsd = 0,
   ) {
     super(message);
+  }
+
+  /** Ten sam blad z kwota, ktora budzet policzyl za zapytanie. */
+  charged(nanoUsd: number): LlmTransportError {
+    return new LlmTransportError(this.message, this.retryable, this.mayHaveBeenBilled, this.status, this.retryAfterMs, nanoUsd);
   }
 }
 

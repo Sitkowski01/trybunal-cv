@@ -32,6 +32,7 @@ describe("parseOutput", () => {
       mayHaveBeenBilled: true,
       status: null,
       retryAfterMs: null,
+      chargedNanoUsd: 0,
     });
   });
 

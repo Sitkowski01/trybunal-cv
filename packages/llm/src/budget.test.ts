@@ -87,9 +87,24 @@ describe("BudgetedLlmClient", () => {
   });
 
   it("brak odpowiedzi, ktory mogl kosztowac (przerwanie, timeout), liczy cala rezerwacje", async () => {
-    const llm = new BudgetedLlmClient(failing(new LlmTransportError("timeout", true, true)), 10 * worst);
+    const llm = new BudgetedLlmClient(failing(new LlmTransportError("timeout", true, true, 504, 7)), 10 * worst);
     await expect(llm.generate(request)).rejects.toThrow("timeout");
     expect(llm.spentNanoUsd).toBe(worst);
+  });
+
+  it("blad, ktory kosztowal, niesie kwote rezerwacji; odmowa przed praca modelu niesie zero", async () => {
+    const billed = new BudgetedLlmClient(failing(new LlmTransportError("timeout", true, true, 504, 7)), 10 * worst);
+    await expect(billed.generate(request)).rejects.toMatchObject({
+      name: "LlmTransportError",
+      message: "timeout",
+      retryable: true,
+      mayHaveBeenBilled: true,
+      status: 504,
+      retryAfterMs: 7,
+      chargedNanoUsd: worst,
+    });
+    const refused = new LlmTransportError("429", true, false, 429);
+    await expect(new BudgetedLlmClient(failing(refused), worst).generate(request)).rejects.toBe(refused);
   });
 
   it("nieznany blad tez liczy cala rezerwacje — limit ma byc twardy", async () => {
