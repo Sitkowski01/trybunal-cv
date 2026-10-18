@@ -70,9 +70,9 @@ export function openTrialStream(url: string, handlers: StreamHandlers, factory: 
     if (!open) return;
     if (source.readyState === CLOSED) {
       close();
-      handlers.onTrouble("lost", "Nie mozna polaczyc sie z rozprawa: nie istnieje, zostala zapomniana albo serwer nie odpowiada.");
+      handlers.onTrouble("lost", "Nie można połączyć się z rozprawą: nie istnieje, została zapomniana albo serwer nie odpowiada.");
     } else {
-      handlers.onTrouble("reconnecting", "Polaczenie zerwane, wznawiam...");
+      handlers.onTrouble("reconnecting", "Połączenie zerwane, wznawiam…");
     }
   });
   return close;

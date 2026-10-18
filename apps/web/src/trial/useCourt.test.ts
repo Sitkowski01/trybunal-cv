@@ -45,7 +45,7 @@ describe("useCourt", () => {
     act(() => {
       sources.last().emit("error");
     });
-    expect(result.current.trouble).toBe("Polaczenie zerwane, wznawiam...");
+    expect(result.current.trouble).toBe("Połączenie zerwane, wznawiam…");
     act(() => {
       sources.last().emit("open");
     });

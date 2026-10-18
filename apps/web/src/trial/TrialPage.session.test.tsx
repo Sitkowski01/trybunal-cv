@@ -12,12 +12,12 @@ describe("TrialPage - polaczenie", () => {
       });
     };
     emit("error");
-    expect(screen.getByRole("alert")).toHaveTextContent("Polaczenie zerwane, wznawiam...");
+    expect(screen.getByRole("alert")).toHaveTextContent("Połączenie zerwane, wznawiam…");
     emit("open");
     expect(screen.queryByRole("alert")).toBeNull();
     last().readyState = 2;
     emit("error");
-    expect(screen.getByRole("alert")).toHaveTextContent(/^Nie mozna polaczyc sie/u);
+    expect(screen.getByRole("alert")).toHaveTextContent(/^Nie można połączyć się/u);
     expect(status()).toHaveTextContent("Utracono połączenie z rozprawą.");
   });
 

@@ -39,5 +39,5 @@ test("demo: odswiezenie odtwarza rozprawe od poczatku; przerwanie konczy ja jak 
 
 test("demo: nieznana rozprawa w adresie — komunikat zamiast pustej sali", async ({ page }) => {
   await page.goto("?rozprawa=cudza");
-  await expect(page.getByRole("alert")).toContainText("Nie mozna polaczyc sie z rozprawa");
+  await expect(page.getByRole("alert")).toContainText("Nie można połączyć się z rozprawą");
 });

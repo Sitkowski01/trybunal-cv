@@ -68,11 +68,11 @@ describe("openTrialStream", () => {
   it("error przy wznawianiu: tylko informacja; error po zamknieciu przez przegladarke: utrata", () => {
     const { source, handlers } = setup();
     source.emit("error");
-    expect(handlers.onTrouble).toHaveBeenLastCalledWith("reconnecting", "Polaczenie zerwane, wznawiam...");
+    expect(handlers.onTrouble).toHaveBeenLastCalledWith("reconnecting", "Połączenie zerwane, wznawiam…");
     expect(source.closed).toBe(false);
     source.readyState = CLOSED;
     source.emit("error");
-    expect(handlers.onTrouble).toHaveBeenLastCalledWith("lost", expect.stringMatching(/^Nie mozna polaczyc sie z rozprawa/u));
+    expect(handlers.onTrouble).toHaveBeenLastCalledWith("lost", expect.stringMatching(/^Nie można połączyć się z rozprawą/u));
     expect(source.closed).toBe(true);
     source.emit("error");
     expect(handlers.onTrouble).toHaveBeenCalledTimes(2);

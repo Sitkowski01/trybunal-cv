@@ -80,7 +80,7 @@ test("zapomnienie rozprawy: dane usuniete, link juz nie dziala", async ({ page }
   await page.getByRole("button", { name: "Zapomnij rozprawę (usuń dane)" }).click();
   await expect(page.getByText(/^Rozprawa zapomniana/u)).toBeVisible();
   await page.goto(url);
-  await expect(page.getByRole("alert")).toContainText("Nie mozna polaczyc sie z rozprawa");
+  await expect(page.getByRole("alert")).toContainText("Nie można połączyć się z rozprawą");
   await expect(status(page)).toHaveText("Utracono połączenie z rozprawą.");
 });
 
