@@ -39,5 +39,6 @@ test("demo: odswiezenie odtwarza rozprawe od poczatku; przerwanie konczy ja jak 
 
 test("demo: nieznana rozprawa w adresie — komunikat zamiast pustej sali", async ({ page }) => {
   await page.goto("?rozprawa=cudza");
-  await expect(page.getByRole("alert")).toContainText("Nie można połączyć się z rozprawą");
+  // Przegladarka probuje jeszcze 3 razy (1 + 2 + 4 s), zanim uzna polaczenie za utracone.
+  await expect(page.getByRole("alert")).toContainText("Nie można połączyć się z rozprawą", { timeout: 15_000 });
 });

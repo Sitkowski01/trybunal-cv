@@ -1,5 +1,6 @@
 import { act, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { RETRY_DELAYS_MS } from "../api/stream.js";
 import { fakeApi, full, setupPage as setup, status } from "../test/page.js";
 
 describe("TrialPage - polaczenie", () => {
@@ -15,8 +16,24 @@ describe("TrialPage - polaczenie", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Połączenie zerwane, wznawiam…");
     emit("open");
     expect(screen.queryByRole("alert")).toBeNull();
-    last().readyState = 2;
-    emit("error");
+    // Przegladarka zamknela strumien (np. 502): kilka prob ponownego otwarcia, potem utrata.
+    vi.useFakeTimers();
+    try {
+      const fail = () => {
+        last().readyState = 2;
+        emit("error");
+      };
+      fail();
+      expect(screen.getByRole("alert")).toHaveTextContent("Połączenie zerwane, wznawiam…");
+      for (const delay of RETRY_DELAYS_MS) {
+        act(() => {
+          vi.advanceTimersByTime(delay);
+        });
+        fail();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
     expect(screen.getByRole("alert")).toHaveTextContent(/^Nie można połączyć się/u);
     expect(status()).toHaveTextContent("Utracono połączenie z rozprawą.");
   });

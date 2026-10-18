@@ -37,44 +37,74 @@ export interface StreamHandlers {
   readonly onTrouble: (kind: "lost" | "reconnecting" | "bad-data", message: string) => void;
 }
 
-/** Otwiera strumien; zwraca funkcje zamykajaca (do sprzatania w efekcie Reacta). */
+/** Przerwy przed ponownym otwarciem strumienia zamknietego przez przegladarke (np. 502 przy restarcie). */
+export const RETRY_DELAYS_MS: readonly number[] = [1000, 2000, 4000];
+const RECONNECTING = "Połączenie zerwane, wznawiam…";
+
+/**
+ * Otwiera strumien; zwraca funkcje zamykajaca (do sprzatania w efekcie Reacta). Nowe EventSource
+ * nie wysyla Last-Event-ID, wiec po ponownym otwarciu numer ostatniego zdarzenia idzie w ?after=.
+ */
 export function openTrialStream(url: string, handlers: StreamHandlers, factory: EventSourceFactory): () => void {
-  const source = factory(url);
   let open = true;
+  let lastSeq: number | null = null;
+  let failures = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let source: EventSourceLike;
   const close = () => {
     open = false;
+    clearTimeout(timer);
     source.close();
   };
 
-  for (const type of Object.keys(EVENT_TYPES)) {
-    source.addEventListener(type, (message) => {
-      if (!open) return;
-      try {
-        handlers.onEnvelope(parseEnvelope(message.data));
-      } catch (error) {
-        if (!(error instanceof BadEnvelopeError)) throw error;
-        close();
-        handlers.onTrouble("bad-data", error.message);
-      }
-    });
-  }
-  source.addEventListener("open", () => {
-    if (open) handlers.onOpen();
-  });
-  source.addEventListener("end", (message) => {
-    if (!open) return;
-    close();
-    handlers.onEnd(endReason(message.data));
-  });
-  source.addEventListener("error", () => {
-    if (!open) return;
-    if (source.readyState === CLOSED) {
-      close();
-      handlers.onTrouble("lost", "Nie można połączyć się z rozprawą: nie istnieje, została zapomniana albo serwer nie odpowiada.");
-    } else {
-      handlers.onTrouble("reconnecting", "Połączenie zerwane, wznawiam…");
+  const connect = () => {
+    const current = factory(lastSeq === null ? url : `${url}${url.includes("?") ? "&" : "?"}after=${String(lastSeq)}`);
+    source = current;
+    const listen = (type: string, listener: (message: MessageEvent<string>) => void) => {
+      current.addEventListener(type, (message) => {
+        if (open && source === current) listener(message);
+      });
+    };
+    for (const type of Object.keys(EVENT_TYPES)) {
+      listen(type, (message) => {
+        let envelope: Envelope;
+        try {
+          envelope = parseEnvelope(message.data);
+        } catch (error) {
+          if (!(error instanceof BadEnvelopeError)) throw error;
+          close();
+          handlers.onTrouble("bad-data", error.message);
+          return;
+        }
+        lastSeq = envelope.seq;
+        handlers.onEnvelope(envelope);
+      });
     }
-  });
+    listen("open", () => {
+      failures = 0;
+      handlers.onOpen();
+    });
+    listen("end", (message) => {
+      close();
+      handlers.onEnd(endReason(message.data));
+    });
+    listen("error", () => {
+      if (current.readyState !== CLOSED) {
+        handlers.onTrouble("reconnecting", RECONNECTING);
+        return;
+      }
+      const delay = RETRY_DELAYS_MS[failures];
+      if (delay === undefined) {
+        close();
+        handlers.onTrouble("lost", "Nie można połączyć się z rozprawą: nie istnieje, została zapomniana albo serwer nie odpowiada.");
+        return;
+      }
+      failures++;
+      handlers.onTrouble("reconnecting", RECONNECTING);
+      timer = setTimeout(connect, delay);
+    });
+  };
+  connect();
   return close;
 }
 
