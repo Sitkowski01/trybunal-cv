@@ -1,6 +1,6 @@
 import { DEMO_CASE } from "./case.js";
 
-export const REPO_URL = "https://github.com/Sitkowski01/trybunal-cv";
+export const REPO_URL = "https://github.com/Sitkowski01/trybunal-cv-ai";
 
 export interface DemoIntroProps {
   readonly onOpen: () => void;
